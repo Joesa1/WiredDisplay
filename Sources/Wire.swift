@@ -14,7 +14,8 @@ enum PacketKind: UInt8 {
 
 // Length-prefix framing adapted from TargetBridge (MIT). Protocol is independent.
 enum Wire {
-    static let port: UInt16 = 54941
+    // Keep the transport port aligned with Duet and TargetBridge diagnostics.
+    static let port: UInt16 = 54321
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
