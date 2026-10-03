@@ -57,11 +57,13 @@ private func socketAddress(_ ip: String, port: UInt16) throws -> sockaddr_in {
     return address
 }
 
-private func configureSocket(_ fd: Int32, cable: CableAddress) throws {
+private func configureSocket(_ fd: Int32, cable: CableAddress, bindInterface: Bool = true) throws {
     var yes: Int32 = 1
-    var index = cable.index
-    guard setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &index, socklen_t(MemoryLayout.size(ofValue: index))) == 0 else {
-        throw WireError.invalid("无法绑定雷雳接口")
+    if bindInterface {
+        var index = cable.index
+        guard setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &index, socklen_t(MemoryLayout.size(ofValue: index))) == 0 else {
+            throw WireError.invalid("无法绑定雷雳接口")
+        }
     }
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, 4)
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, 4)
@@ -82,18 +84,20 @@ final class CablePeer {
 
     init(fd: Int32) { self.fd = fd }
 
-    static func connect(ip: String, cable: CableAddress) throws -> CablePeer {
+    static func connect(ip: String, cable: CableAddress, bindInterface: Bool = true) throws -> CablePeer {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { throw WireError.invalid("无法创建连接") }
         do {
-            try configureSocket(fd, cable: cable)
-            var local = try socketAddress(cable.ip, port: 0)
-            let bound = withUnsafePointer(to: &local) {
-                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
-            }
-            guard bound == 0 else {
-                let code = errno
-                throw WireError.invalid("无法绑定本机雷雳地址 \(cable.ip)（\(code): \(String(cString: strerror(code)))）")
+            try configureSocket(fd, cable: cable, bindInterface: bindInterface)
+            if bindInterface {
+                var local = try socketAddress(cable.ip, port: 0)
+                let bound = withUnsafePointer(to: &local) {
+                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+                }
+                guard bound == 0 else {
+                    let code = errno
+                    throw WireError.invalid("无法绑定本机雷雳地址 \(cable.ip)（\(code): \(String(cString: strerror(code)))）")
+                }
             }
             let flags = fcntl(fd, F_GETFL)
             _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
@@ -124,13 +128,18 @@ final class CablePeer {
         var lastError: Error?
         for attempt in 0..<max(1, attempts) {
             do {
-                return try connect(ip: ip, cable: cable)
+                return try connect(ip: ip, cable: cable, bindInterface: true)
             } catch {
                 lastError = error
                 if attempt + 1 < max(1, attempts) {
                     Thread.sleep(forTimeInterval: 0.5)
                 }
             }
+        }
+        do {
+            return try connect(ip: ip, cable: cable, bindInterface: false)
+        } catch {
+            lastError = error
         }
         throw lastError ?? WireError.invalid("无法连接接收端")
     }
