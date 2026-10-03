@@ -180,6 +180,10 @@ final class VideoSurface: NSView {
         pointer = value
         if let png = value.png, let bitmap = NSBitmapImageRep(data: png), let cgImage = bitmap.cgImage {
             cursorLayer.contents = cgImage
+        } else if cursorLayer.contents == nil,
+                  let bitmap = NSCursor.arrow.image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)),
+                  let cgImage = bitmap.cgImage {
+            cursorLayer.contents = cgImage
         }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         updatePointerFrame()

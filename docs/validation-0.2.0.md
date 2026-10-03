@@ -1,4 +1,4 @@
-# 0.2.0 validation
+# 0.2.2 validation
 
 ## Real cable observation, 2026-10-03
 
@@ -32,6 +32,6 @@ identity, socket binding and receiver state differed across builds.
 
 ## Pending
 
-Install 0.2.0 on the remote iMac, restart its receiver, and use its new pairing code.
+Install 0.2.2 on the remote iMac, restart its receiver, and use its new pairing code.
 Run Test Connection, then actual display streaming. Intel runtime, Bonjour discovery,
 link-local IPs, cable hot-plug, and measured screen-to-screen latency remain unverified.

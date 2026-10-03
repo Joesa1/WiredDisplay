@@ -5,14 +5,14 @@ One app contains both roles. The **MacBook sender** creates and captures a virtu
 extended desktop. The **iMac receiver** decodes and displays the incoming video.
 There is no account, subscription, audio transport, or Duet protocol compatibility.
 
-## Downloads: 0.2.1 preview
+## Downloads: 0.2.2 preview
 
-Install **0.2.1 on both Macs**. Older receivers can close the connection silently
+Install **0.2.2 on both Macs**. Older receivers can close the connection silently
 when the sender reports a different application version.
 
-- [Apple silicon / arm64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.1/WiredDisplay-arm64.zip)
-- [Intel / x86_64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.1/WiredDisplay-x86_64.zip)
-- [Release and checksums](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.2.1)
+- [Apple silicon / arm64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.2/WiredDisplay-arm64.zip)
+- [Intel / x86_64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.2/WiredDisplay-x86_64.zip)
+- [Release and checksums](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.2.2)
 
 M-series Macs use arm64. Intel Macs use x86_64. Sender and receiver use the same app;
 choose the package for the processor of the Mac where it will run.
@@ -38,7 +38,7 @@ For the fixed-address setup, configure Thunderbolt Bridge as follows:
 
 Avoid an address range already used by another network or VPN. Automatic
 `169.254.x.x` addresses remain supported, but that path has not been validated in
-the 0.2.1 preview. A fixed IP does not itself reduce video latency.
+the 0.2.2 preview. A fixed IP does not itself reduce video latency.
 
 The receiver advertises one of two preferred display modes: `2240 × 1260` for a
 5K Retina iMac such as the M1 model, or `2560 × 1440` for the 2017 2.5K Intel iMac.
@@ -60,7 +60,7 @@ These are display modes, not the panel's physical backing-pixel dimensions.
 The receiver stays listening after invalid clients, failed pairing, and disconnects.
 A new client replaces the active session only after valid pairing. **断开** stops
 both the session and listening. The visible app version identifies the installed
-build; protocol version determines compatibility in 0.2.0 and later.
+build; protocol version determines compatibility in 0.2.2 and later.
 
 ## Connection diagnostics
 
@@ -99,6 +99,8 @@ If Gatekeeper blocks first launch, use Finder's **Open** or the app-specific
 - Bonjour `_wireddisplay._tcp` advertises address, interface, app and protocol version.
 - TCP_NODELAY, interactive-video service class, bounded frame budget, hardware
   VideoToolbox encoding/decoding, and immediate native video presentation.
+- Cursor coordinates are lightweight, begin after the first decoded frame is
+  acknowledged, and cannot terminate a video session.
 - Five-second deadline and eight-candidate limit for unauthenticated clients.
 - Protocol-aware probes never become display sessions. Bad clients do not stop listening.
 
@@ -108,7 +110,7 @@ MIT notice are retained in `LICENSE-TargetBridge.txt`.
 
 ## Validation status
 
-0.2.0 is a preview, not a confirmed end-to-end fix:
+0.2.2 is a preview, not a confirmed end-to-end fix:
 
 - Both architectures compile and packaged app signatures verify.
 - Native arm64 transport check passes fragmented/coalesced frames, oversized packet
@@ -119,7 +121,7 @@ MIT notice are retained in `LICENSE-TargetBridge.txt`.
 - On the connected Macs, Network.framework established TCP to `10.10.10.3:54321`
   using `bridge0` in approximately 1 ms. The old receiver then closed after Hello
   without returning a profile. This measures connection setup, **not display latency**.
-- Both-Mac 0.2.0 streaming, Intel runtime, Bonjour discovery between two machines,
+- Both-Mac 0.2.2 streaming, Intel runtime, Bonjour discovery between two machines,
   automatic link-local addressing, and end-to-end latency still need validation.
 
 See [validation notes](docs/validation-0.2.0.md).

@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var sender: AnyObject?
     private var pointerTimer: Timer?
     private var monitorTimer: Timer?
-    private var lastCursorImage: Data?
+    private var pointerStarted = false
     private var ticks = 0
     private var sessionID = UUID()
     private var code = ""
@@ -295,8 +295,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 session.lastSequence = sequence
                 try session.decoder.decode(data)
             case .cursor:
-                let pointer = try Wire.decode(PointerUpdate.self, data)
-                try pointer.validate()
+                // Cursor delivery is best-effort. It must never tear down video.
+                guard session.configured,
+                      let pointer = try? Wire.decode(PointerUpdate.self, data),
+                      (try? pointer.validate()) != nil else { return }
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.sessionID == generation, self.peer === accepted else { return }
                     self.surface.setPointer(pointer)
@@ -372,6 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     guard let self, self.sessionID == generation else { peer.stop(); return }
                     self.connecting = false
                     self.peer = peer
+                    self.pointerStarted = false
                     self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
                     var receivedProfile = false
                     peer.onPacket = { [weak self, weak peer] kind, data in
@@ -419,7 +422,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                     try await sender.start(profile: selected)
                                     guard self.sessionID == generation else { await sender.stop(); return }
                                     self.statusLabel.stringValue = "已扩展 · \(selected.width) × \(selected.height) · 60 帧目标\n在系统设置 → 显示器中调整屏幕排列。"
-                                    self.startPointer(sender: sender, peer: connection)
                                 } catch {
                                     if self.sessionID == generation {
                                         self.record("发送端视频启动失败：\(error.localizedDescription)")
@@ -430,7 +432,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                         case .acknowledgment:
                             DispatchQueue.main.async {
                                 guard self.sessionID == generation else { return }
-                                (self.sender as? ScreenSender)?.acknowledge(data)
+                                guard let sender = self.sender as? ScreenSender else { return }
+                                sender.acknowledge(data)
+                                guard !self.pointerStarted else { return }
+                                self.pointerStarted = true
+                                self.record("首帧已确认 · 已启动轻量鼠标同步")
+                                self.startPointer(sender: sender, peer: connection)
                             }
                         case .heartbeat: break
                         case .end:
@@ -482,29 +489,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @available(macOS 14.0, *)
     private func startPointer(sender: ScreenSender, peer: CablePeer) {
-        lastCursorImage = nil
-        pointerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self, weak sender, weak peer] _ in
-            guard let self, let sender, let peer, let event = CGEvent(source: nil) else { return }
+        pointerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak sender, weak peer] _ in
+            guard let sender, let peer, let event = CGEvent(source: nil) else { return }
             let rect = CGDisplayBounds(sender.displayID)
             guard rect.width > 0, rect.height > 0 else { return }
             let location = event.location
-            guard let cursor = NSCursor.currentSystem else { return }
-            let bitmap = cursor.image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:))
-            let image = bitmap?.representation(using: .png, properties: [:])
-            let changed = image != self.lastCursorImage
-            self.lastCursorImage = image
-            let pixelWidth = Double(bitmap?.pixelsWide ?? 32)
-            let pixelHeight = Double(bitmap?.pixelsHigh ?? 32)
-            let scale = pixelWidth / max(1, cursor.image.size.width)
             let pointer = PointerUpdate(x: (location.x - rect.minX) / rect.width,
                 y: (location.y - rect.minY) / rect.height, visible: rect.contains(location),
-                hotX: cursor.hotSpot.x * scale, hotY: cursor.hotSpot.y * scale,
-                width: pixelWidth, height: pixelHeight, png: changed ? image : nil)
-            // Hidden positions are clamped to keep the protocol bounded across screen arrangements.
+                hotX: 0, hotY: 0, width: 32, height: 32, png: nil)
             let bounded = PointerUpdate(x: min(2, max(-2, pointer.x)), y: min(2, max(-2, pointer.y)),
                 visible: pointer.visible, hotX: pointer.hotX, hotY: pointer.hotY,
                 width: pointer.width, height: pointer.height, png: pointer.png)
-            if let payload = try? Wire.json(bounded) { peer.sendPointer(payload) }
+            guard (try? bounded.validate()) != nil, let payload = try? Wire.json(bounded) else { return }
+            peer.sendPointer(payload)
         }
         RunLoop.main.add(pointerTimer!, forMode: .common)
     }
@@ -534,6 +531,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         sessionID = UUID()
         connecting = false
         transportReady = false
+        pointerStarted = false
         pointerTimer?.invalidate(); pointerTimer = nil
         listener?.stop(); listener = nil
         for candidate in candidates.values { candidate.stop() }
