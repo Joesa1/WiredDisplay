@@ -91,7 +91,10 @@ final class CablePeer {
             let bound = withUnsafePointer(to: &local) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
             }
-            guard bound == 0 else { throw WireError.invalid("雷雳地址已经变化，请重新连接") }
+            guard bound == 0 else {
+                let code = errno
+                throw WireError.invalid("无法绑定本机雷雳地址 \(cable.ip)（\(code): \(String(cString: strerror(code)))）")
+            }
             let flags = fcntl(fd, F_GETFL)
             _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
             var remote = try socketAddress(ip, port: Wire.port)
@@ -99,13 +102,17 @@ final class CablePeer {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
             }
             if result != 0 {
-                guard errno == EINPROGRESS else { throw WireError.invalid("无法连接接收端，请检查雷雳线和地址") }
+                let code = errno
+                guard code == EINPROGRESS else {
+                    throw WireError.invalid("无法连接接收端 \(ip):\(Wire.port)（\(code): \(String(cString: strerror(code)))）")
+                }
                 var event = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
                 guard poll(&event, 1, 5000) > 0 else { throw WireError.invalid("连接超时，请在 iMac 点击「用作显示器」") }
                 var error: Int32 = 0
                 var size = socklen_t(MemoryLayout<Int32>.size)
                 guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) == 0, error == 0 else {
-                    throw WireError.invalid("接收端没有响应，请检查地址与防火墙")
+                    let code = error == 0 ? errno : error
+                    throw WireError.invalid("接收端没有监听 \(ip):\(Wire.port)（\(code): \(String(cString: strerror(code)))）")
                 }
             }
             _ = fcntl(fd, F_SETFL, flags)
@@ -218,8 +225,13 @@ final class CableListener {
             let result = withUnsafePointer(to: &address) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
             }
-            guard result == 0, listen(fd, 2) == 0 else {
-                throw WireError.invalid("端口被占用，请退出另一个 WiredDisplay")
+            guard result == 0 else {
+                let code = errno
+                throw WireError.invalid("无法监听雷雳地址 \(cable.ip):\(Wire.port)（\(code): \(String(cString: strerror(code)))）")
+            }
+            guard listen(fd, 2) == 0 else {
+                let code = errno
+                throw WireError.invalid("端口 \(Wire.port) 无法监听（\(code): \(String(cString: strerror(code)))）")
             }
         } catch { Darwin.close(fd); throw error }
     }
