@@ -8,7 +8,7 @@ func check(_ status: OSStatus, _ message: String) throws {
 }
 
 func makeFormat(_ config: VideoConfiguration) throws -> CMVideoFormatDescription {
-    try DisplayProfile(width: config.width, height: config.height, hiDPI: true, hevc: config.hevc).validate()
+    try DisplayProfile(width: config.width, height: config.height, hiDPI: true, hevc: config.hevc, appVersion: nil).validate()
     guard config.parameterSets.count == (config.hevc ? 3 : 2),
           config.parameterSets.allSatisfy({ !$0.isEmpty && $0.count <= 65536 }) else {
         throw WireError.invalid("视频参数无效")
