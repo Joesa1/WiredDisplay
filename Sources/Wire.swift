@@ -16,6 +16,8 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Keep the transport port aligned with Duet and TargetBridge diagnostics.
     static let port: UInt16 = 54321
+    static let protocolVersion = 1
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -48,6 +50,13 @@ enum Wire {
 struct Hello: Codable {
     let version: Int
     let code: String
+    let appVersion: String?
+
+    init(version: Int, code: String, appVersion: String = Wire.appVersion) {
+        self.version = version
+        self.code = code
+        self.appVersion = appVersion
+    }
 }
 
 struct DisplayProfile: Codable {
@@ -55,6 +64,7 @@ struct DisplayProfile: Codable {
     let height: Int
     let hiDPI: Bool
     let hevc: Bool
+    let appVersion: String?
 
     func validate() throws {
         guard (640...5120).contains(width), (480...2880).contains(height),
@@ -66,7 +76,7 @@ struct DisplayProfile: Codable {
         let ratio = to4K ? min(1, min(3840.0 / Double(width), 2160.0 / Double(height))) : 1
         return DisplayProfile(width: Int(Double(width) * ratio) / 2 * 2,
                               height: Int(Double(height) * ratio) / 2 * 2,
-                              hiDPI: hiDPI, hevc: hevc)
+                              hiDPI: hiDPI, hevc: hevc, appVersion: appVersion)
     }
 }
 
