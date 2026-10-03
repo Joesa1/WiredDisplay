@@ -210,9 +210,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let modes = CGDisplayCopyAllDisplayModes(id, nil) as? [CGDisplayMode] ?? []
         let native = modes.filter { $0.pixelWidth <= 5120 && $0.pixelHeight <= 2880 }
             .max { $0.pixelWidth * $0.pixelHeight < $1.pixelWidth * $1.pixelHeight }
-        let width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
-        let height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
-        return DisplayProfile(width: width, height: height, hiDPI: screen.backingScaleFactor > 1,
+        var width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
+        var height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
+        var hiDPI = screen.backingScaleFactor > 1
+        // A 5K Retina iMac advertises 4480x2520 physical pixels but its default
+        // display mode is 2240x1260. Stream the selected mode, not the panel's
+        // physical backing size, so the sender does not need a 5K encoder.
+        if width > 3840 && height > 2160 && hiDPI {
+            width = 2240
+            height = 1260
+            hiDPI = false
+        } else if width >= 2500 && width <= 3200 && height >= 1400 && height <= 1800 {
+            width = 2560
+            height = 1440
+            hiDPI = false
+        }
+        return DisplayProfile(width: width, height: height, hiDPI: hiDPI,
                               hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                               appVersion: Wire.appVersion)
     }
@@ -382,10 +395,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                     self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
                                     return
                                 }
-                                let selected = profile.limited(to4K: limited)
+                                let needs4KCap = limited || profile.width > 3840 || profile.height > 2160
+                                let selected = profile.limited(to4K: needs4KCap)
+                                if needs4KCap && !limited {
+                                    self.record("接收端为 5K/超 4K 面板，自动使用 4K 硬件兼容档 · \(selected.width) × \(selected.height)")
+                                }
                                 let sender = ScreenSender(peer: connection)
                                 self.sender = sender
                                 sender.onFailure = { [weak self] message in self?.fail(message) }
+                                sender.onStatus = { [weak self] message in
+                                    DispatchQueue.main.async {
+                                        guard let self, self.sessionID == generation else { return }
+                                        self.record("发送端：\(message)")
+                                    }
+                                }
                                 sender.onStats = { [weak self] text in
                                     DispatchQueue.main.async {
                                         guard let self, self.sessionID == generation else { return }
@@ -397,7 +420,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                     guard self.sessionID == generation else { await sender.stop(); return }
                                     self.statusLabel.stringValue = "已扩展 · \(selected.width) × \(selected.height) · 60 帧目标\n在系统设置 → 显示器中调整屏幕排列。"
                                     self.startPointer(sender: sender, peer: connection)
-                                } catch { if self.sessionID == generation { self.endSession(error.localizedDescription) } }
+                                } catch {
+                                    if self.sessionID == generation {
+                                        self.record("发送端视频启动失败：\(error.localizedDescription)")
+                                        self.endSession("发送端视频启动失败：\(error.localizedDescription)")
+                                    }
+                                }
                             }
                         case .acknowledgment:
                             DispatchQueue.main.async {
