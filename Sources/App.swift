@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let cableLabel = NSTextField(labelWithString: "正在检查雷雳接口…")
     private let pairingLabel = NSTextField(labelWithString: "")
     private let metricsLabel = NSTextField(labelWithString: "")
+    private let versionLabel = NSTextField(labelWithString: "")
     private let addressField = NSTextField()
     private let codeField = NSTextField()
     private let quality = NSPopUpButton()
@@ -126,6 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         metricsLabel.textColor = .secondaryLabelColor
         metricsLabel.toolTip = "从送入编码器到接收端提交画面、确认返回的耗时。不是屏幕实际亮起的延迟。静止桌面会自动减少帧数。"
         stack.addArrangedSubview(metricsLabel)
+        versionLabel.stringValue = "WiredDisplay \(Wire.appVersion) · Protocol \(Wire.protocolVersion)"
+        versionLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        versionLabel.textColor = .tertiaryLabelColor
+        stack.addArrangedSubview(versionLabel)
         stopButton = NSButton(title: "断开", target: self, action: #selector(disconnect))
         stopButton.bezelStyle = .rounded
         stopButton.isEnabled = false
@@ -177,7 +182,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
         let height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
         return DisplayProfile(width: width, height: height, hiDPI: screen.backingScaleFactor > 1,
-                              hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC))
+                              hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+                              appVersion: Wire.appVersion)
     }
 
     private func accept(_ accepted: CablePeer, code: String) {
@@ -194,7 +200,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if !session.authenticated {
                 guard kind == .hello else { throw WireError.invalid("请先配对") }
                 let hello = try Wire.decode(Hello.self, data)
-                guard hello.version == 1, hello.code == code else { throw WireError.invalid("配对码不正确") }
+                guard hello.version == Wire.protocolVersion else {
+                    throw WireError.invalid("协议版本不兼容，请在两台 Mac 安装同一版本 WiredDisplay")
+                }
+                guard hello.appVersion == Wire.appVersion else {
+                    throw WireError.invalid("发射端版本 \(hello.appVersion ?? "旧版") 与接收端 \(Wire.appVersion) 不一致，请更新两台 Mac")
+                }
+                guard hello.code == code else { throw WireError.invalid("配对码不正确") }
                 session.authenticated = true
                 try profile.validate()
                 accepted.send(.profile, try Wire.json(profile))
@@ -293,6 +305,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                             receivedProfile = true
                             let profile = try Wire.decode(DisplayProfile.self, data)
                             try profile.validate()
+                            guard profile.appVersion == Wire.appVersion else {
+                                throw WireError.invalid("接收端版本 \(profile.appVersion ?? "旧版") 与发射端 \(Wire.appVersion) 不一致，请更新两台 Mac")
+                            }
                             Task { @MainActor [weak self] in
                                 guard let self, self.sessionID == generation else { return }
                                 let selected = profile.limited(to4K: limited)
