@@ -218,6 +218,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private let peer: CablePeer
     private(set) var displayID: CGDirectDisplayID = 0
     var onFailure: ((String) -> Void)?
+    var onStatus: ((String) -> Void)?
     var onStats: ((String) -> Void)?
     private var acknowledged = 0
     private var skipped = 0
@@ -227,6 +228,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     init(peer: CablePeer) { self.peer = peer }
 
     @MainActor func start(profile: DisplayProfile) async throws {
+        onStatus?("正在创建虚拟显示器 · \(profile.width) × \(profile.height)")
         try profile.validate()
         self.profile = profile
         let descriptor = CGVirtualDisplayDescriptor()
@@ -242,15 +244,17 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         descriptor.greenPrimary = NSPoint(x: 0.30, y: 0.60)
         descriptor.bluePrimary = NSPoint(x: 0.15, y: 0.06)
         descriptor.queue = queue
-        guard let display = CGVirtualDisplay(descriptor: descriptor) else { throw WireError.invalid("无法创建扩展屏幕") }
+        guard let display = CGVirtualDisplay(descriptor: descriptor) else { throw WireError.invalid("无法创建扩展屏幕（CGVirtualDisplay 返回空值）") }
         let settings = CGVirtualDisplaySettings()
         settings.hiDPI = profile.hiDPI
         let factor = profile.hiDPI ? 2 : 1
         settings.modes = [CGVirtualDisplayMode(width: UInt(profile.width / factor), height: UInt(profile.height / factor), refreshRate: 60)!]
-        guard display.apply(settings) else { throw WireError.invalid("系统拒绝此扩展屏幕尺寸") }
+        guard display.apply(settings) else { throw WireError.invalid("系统拒绝此扩展屏幕尺寸 \(profile.width) × \(profile.height)") }
         virtualDisplay = display
         displayID = display.displayID
+        onStatus?("虚拟显示器已创建 · ID \(displayID) · 正在准备硬件编码器")
         try queue.sync { try createEncoder(profile) }
+        onStatus?("硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")
         var target: SCDisplay?
         for _ in 0..<30 {
             guard !peer.isStopped else { throw WireError.invalid("连接已取消") }
@@ -259,7 +263,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
             if target != nil { break }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        guard let target else { throw WireError.invalid("系统未提供扩展屏幕，请检查屏幕录制权限") }
+        guard let target else { throw WireError.invalid("ScreenCaptureKit 未找到虚拟屏幕，请检查屏幕录制权限") }
         let config = SCStreamConfiguration()
         config.width = profile.width
         config.height = profile.height
@@ -275,6 +279,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         self.stream = stream
         try await stream.startCapture()
+        onStatus?("屏幕采集已启动 · 等待首帧")
     }
 
     private func createEncoder(_ profile: DisplayProfile) throws {
@@ -393,5 +398,6 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         }
         virtualDisplay = nil
         displayID = 0
+        onStatus?("发送端视频已停止")
     }
 }
