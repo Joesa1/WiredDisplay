@@ -46,6 +46,13 @@ The first connection can take a few seconds while macOS creates the virtual disp
 Keep the cable connected while the session is active. Click **Disconnect** in either
 window to stop the session.
 
+## First launch on macOS
+
+The release is ad hoc signed because it is distributed outside the Mac App Store. If
+macOS blocks the first launch, Control click `WiredDisplay.app`, choose **Open**, and
+confirm. The same action is available in **System Settings > Privacy & Security > Open
+Anyway**.
+
 ## Design
 
 The implementation is independent of Duet's closed protocol. It uses the same classes of
