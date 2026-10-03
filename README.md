@@ -52,6 +52,10 @@ The receiver status must show `监听中 · TCP 54321` before the sender connect
 sender reports `Connection refused`, run `lsof -nP -iTCP:54321 -sTCP:LISTEN` on the iMac;
 the receiver process must be listed.
 
+The current app version and protocol version are shown at the bottom of both windows.
+Both Macs must run the same app version. A mismatched version is rejected during the
+handshake with an explicit error.
+
 The first connection can take a few seconds while macOS creates the virtual display.
 Keep the cable connected while the session is active. Click **Disconnect** in either
 window to stop the session.
