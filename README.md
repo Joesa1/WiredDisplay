@@ -29,6 +29,12 @@ two Macs use different processor families, download one package for each Mac.
 - macOS 12.3 or later on the receiver.
 - Screen Recording permission for WiredDisplay on the sender.
 
+For the most deterministic Duet-style setup, configure **Thunderbolt Bridge** manually on
+both Macs: use `10.10.10.2` on the MacBook, `10.10.10.3` on the iMac, and
+`255.255.255.0` as the subnet mask. Leave Router and DNS empty. The last octet must be
+different on the two Macs. WiredDisplay also accepts macOS automatic `169.254.x.x`
+addresses, but fixed addresses make troubleshooting and reconnection more predictable.
+
 ## Quick start
 
 1. Connect the cable and wait for **Thunderbolt Bridge** to show an address in Network
@@ -41,6 +47,10 @@ two Macs use different processor families, download one package for each Mac.
    if macOS asks.
 5. The iMac opens the received display full screen. Arrange the display in **System
    Settings > Displays** on the MacBook.
+
+The receiver status must show `监听中 · TCP 54321` before the sender connects. If the
+sender reports `Connection refused`, run `lsof -nP -iTCP:54321 -sTCP:LISTEN` on the iMac;
+the receiver process must be listed.
 
 The first connection can take a few seconds while macOS creates the virtual display.
 Keep the cable connected while the session is active. Click **Disconnect** in either
