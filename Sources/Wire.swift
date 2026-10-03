@@ -14,10 +14,10 @@ enum PacketKind: UInt8 {
 
 // Length-prefix framing adapted from TargetBridge (MIT). Protocol is independent.
 enum Wire {
-    // Keep the transport port aligned with Duet and TargetBridge diagnostics.
+    // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
     static let protocolVersion = 1
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -50,10 +50,12 @@ enum Wire {
 struct Hello: Codable {
     let version: Int
     let code: String
+    let probe: Bool?
     let appVersion: String?
 
-    init(version: Int, code: String, appVersion: String = Wire.appVersion) {
+    init(version: Int, code: String, appVersion: String = Wire.appVersion, probe: Bool = false) {
         self.version = version
+        self.probe = probe
         self.code = code
         self.appVersion = appVersion
     }

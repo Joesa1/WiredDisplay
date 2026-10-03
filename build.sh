@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
-
 cd "$(dirname "$0")"
-rm -rf dist
 mkdir -p build/arm64 build/x86_64 dist
 sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
-
+# Sign outside Desktop/iCloud: File Provider may reattach FinderInfo during signing.
+staging="$(mktemp -d /private/tmp/wireddisplay-build.XXXXXX)"
+trap 'rm -rf "$staging"' EXIT
 for architecture in arm64 x86_64; do
     xcrun swiftc -swift-version 5 -O -sdk "$sdk_path" -target "$architecture-apple-macos12.3" \
         -disable-autolinking-runtime-compatibility \
@@ -13,25 +13,17 @@ for architecture in arm64 x86_64; do
         -o "build/$architecture/WiredDisplay" \
         -framework AppKit -framework ScreenCaptureKit -framework VideoToolbox \
         -framework AVFoundation -framework CoreMedia -framework CoreVideo \
-        -framework SystemConfiguration -framework CoreGraphics
-
-    app="dist/WiredDisplay-$architecture.app"
+        -framework SystemConfiguration -framework CoreGraphics -framework Network
+    app="$staging/WiredDisplay-$architecture.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-    cp "build/$architecture/WiredDisplay" "$app/Contents/MacOS/WiredDisplay"
-    cp Info.plist "$app/Contents/Info.plist"
-    cp LICENSE-TargetBridge.txt "$app/Contents/Resources/"
-    rm -rf "$app/Contents/_CodeSignature"
-    xattr -cr "$app" 2>/dev/null || true
-    xattr -d com.apple.FinderInfo "$app" 2>/dev/null || true
-    xattr -d com.apple.fileprovider.fpfs#P "$app" 2>/dev/null || true
-    xattr -d com.apple.provenance "$app" 2>/dev/null || true
-    codesign --force --sign - --identifier "local.wired-display.$architecture" "$app"
-    xattr -cr "$app" 2>/dev/null || true
-    xattr -d com.apple.FinderInfo "$app" 2>/dev/null || true
-    xattr -d com.apple.fileprovider.fpfs#P "$app" 2>/dev/null || true
-    xattr -d com.apple.provenance "$app" 2>/dev/null || true
+    cp -X "build/$architecture/WiredDisplay" "$app/Contents/MacOS/WiredDisplay"
+    cp -X Info.plist "$app/Contents/Info.plist"
+    cp -X LICENSE-TargetBridge.txt "$app/Contents/Resources/"
+    codesign --force --sign "${WIRED_SIGN_IDENTITY:--}" --identifier local.wired-display.app "$app"
     codesign --verify --deep --strict "$app"
     ditto -c -k --sequesterRsrc --keepParent "$app" "dist/WiredDisplay-$architecture.zip"
+    rm -rf "dist/WiredDisplay-$architecture.app"
+    ditto --norsrc "$app" "dist/WiredDisplay-$architecture.app"
 done
-
-echo "Built dist/WiredDisplay-arm64.zip and dist/WiredDisplay-x86_64.zip"
+shasum -a 256 dist/*.zip > dist/SHA256SUMS.txt
+echo "Built arm64 and x86_64 packages. Two-Mac validation is still required."

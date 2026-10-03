@@ -1,4 +1,5 @@
 import AppKit
+import Network
 import VideoToolbox
 
 private final class ReceiveSession {
@@ -22,6 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let codeField = NSTextField()
     private let quality = NSPopUpButton()
     private var sendButton: NSButton!
+    private var testButton: NSButton!
+    private let discovery = CableDiscovery()
+    private var candidates: [ObjectIdentifier: CablePeer] = [:]
+    private var diagnosticLines: [String] = []
     private var receiveButton: NSButton!
     private var stopButton: NSButton!
     private var listener: CableListener?
@@ -35,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var code = ""
     private let receiveLock = NSLock()
     private var receiveSession: ReceiveSession?
+    private var transportReady = false
     private var connecting = false
     private var stopping = false
     private var quitting = false
@@ -44,6 +50,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         buildMenu()
         buildWindow()
         monitorTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        discovery.onReceivers = { [weak self] addresses in
+            guard let self, !self.connecting, self.peer == nil else { return }
+            let remote = addresses.filter { $0 != CableAddress.current()?.ip }
+            if self.addressField.stringValue.isEmpty, remote.count == 1 {
+                self.addressField.stringValue = remote[0]
+            }
+        }
+        discovery.start()
         tick()
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -68,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func buildWindow() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 440),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 580),
             styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "WiredDisplay"
         window.delegate = self
@@ -120,6 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let actions = NSStackView(views: [quality, sendButton])
         actions.spacing = 12
         stack.addArrangedSubview(actions)
+        testButton = NSButton(title: "测试连接", target: self, action: #selector(testConnection))
+        let networkSettings = NSButton(title: "本地网络设置", target: self, action: #selector(openNetworkSettings))
+        let copy = NSButton(title: "拷贝诊断", target: self, action: #selector(copyDiagnostics))
+        stack.addArrangedSubview(NSStackView(views: [testButton, networkSettings, copy]))
+        statusLabel.isSelectable = true
         statusLabel.font = .systemFont(ofSize: 13)
         statusLabel.widthAnchor.constraint(equalToConstant: 404).isActive = true
         stack.addArrangedSubview(statusLabel)
@@ -140,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func setBusy(_ busy: Bool) {
         sendButton.isEnabled = !busy
+        testButton.isEnabled = !busy
         receiveButton.isEnabled = !busy
         addressField.isEnabled = !busy
         codeField.isEnabled = !busy
@@ -159,16 +179,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             sessionID = UUID()
             let generation = sessionID
             listener.onAccept = { [weak self] accepted in
-                DispatchQueue.main.async {
-                    guard let self, self.sessionID == generation, self.listener != nil, self.peer == nil else {
-                        accepted.stop(); accepted.start(); return
-                    }
+                DispatchQueue.main.async { [accepted] in
+                    guard let self, self.sessionID == generation, self.listener != nil,
+                          self.candidates.count < 8 else { accepted.stop(); return }
+                    self.candidates[ObjectIdentifier(accepted)] = accepted
                     self.accept(accepted, code: self.code)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak accepted] in
+                        guard let self, let accepted,
+                              self.candidates[ObjectIdentifier(accepted)] != nil else { return }
+                        accepted.stop()
+                    }
+                }
+            }
+            listener.onState = { [weak self] message, _ in
+                DispatchQueue.main.async {
+                    guard let self, self.sessionID == generation else { return }
+                    self.record(message)
                 }
             }
             listener.start()
             pairingLabel.stringValue = "地址 \(cable.ip)    配对码 \(code)"
-            statusLabel.stringValue = "监听中 · TCP \(Wire.port)\n在 MacBook 填入地址与配对码。接收后自动全屏，Esc 返回。"
+            record("正在启动接收端 · \(cable.description)")
             setBusy(true)
         } catch { statusLabel.stringValue = error.localizedDescription }
     }
@@ -189,27 +220,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func accept(_ accepted: CablePeer, code: String) {
         let session = ReceiveSession()
         let profile = panelProfile()
-        receiveLock.lock(); receiveSession = session; receiveLock.unlock()
-        peer = accepted
         let generation = sessionID
-        session.decoder.onImage = { [weak self] image, sequence in self?.surface.offer(image, sequence: sequence) }
+        session.decoder.onImage = { [weak self, weak session] image, sequence in
+            guard let self, let session else { return }
+            self.receiveLock.lock()
+            if self.receiveSession === session { self.surface.offer(image, sequence: sequence) }
+            self.receiveLock.unlock()
+        }
         session.decoder.onFailure = { [weak accepted] _ in accepted?.stop() }
         accepted.onPacket = { [weak self, weak accepted] kind, data in
             guard let self, let accepted else { return }
             self.receiveLock.lock(); session.lastSeen = DispatchTime.now().uptimeNanoseconds; self.receiveLock.unlock()
             if !session.authenticated {
-                guard kind == .hello else { throw WireError.invalid("请先配对") }
-                let hello = try Wire.decode(Hello.self, data)
-                guard hello.version == Wire.protocolVersion else {
-                    throw WireError.invalid("协议版本不兼容，请在两台 Mac 安装同一版本 WiredDisplay")
+                do {
+                    guard kind == .hello else { throw WireError.invalid("请先配对") }
+                    let hello = try Wire.decode(Hello.self, data)
+                    guard hello.version == Wire.protocolVersion else {
+                        throw WireError.invalid("协议版本不兼容，请更新两台 Mac")
+                    }
+                    guard hello.code == code else { throw WireError.invalid("配对码不正确") }
+                    try profile.validate()
+                    if hello.probe == true {
+                        accepted.send(.profile, try Wire.json(profile)) { accepted.stop() }
+                        return
+                    }
+                    let promoted = DispatchQueue.main.sync { () -> Bool in
+                        guard self.sessionID == generation, self.listener != nil else { return false }
+                        self.candidates.removeValue(forKey: ObjectIdentifier(accepted))
+                        let previous = self.peer
+                        self.peer = accepted
+                        self.receiveLock.lock(); self.receiveSession = session; self.receiveLock.unlock()
+                        previous?.stop()
+                        self.surface.reset()
+                        self.surface.onSubmit = { [weak accepted] sequence in
+                            var data = Data(); Wire.append(sequence, to: &data)
+                            accepted?.send(.acknowledgment, data)
+                        }
+                        self.surface.onFirstImage = { [weak self] in self?.showVideo() }
+                        self.record("配对通过 · 发射端 \(hello.appVersion ?? "未知") · 等待视频配置")
+                        return true
+                    }
+                    guard promoted else { accepted.stop(); return }
+                    session.authenticated = true
+                    accepted.send(.profile, try Wire.json(profile))
+                } catch {
+                    accepted.send(.end, Data(error.localizedDescription.utf8)) { accepted.stop() }
                 }
-                guard hello.appVersion == Wire.appVersion else {
-                    throw WireError.invalid("发射端版本 \(hello.appVersion ?? "旧版") 与接收端 \(Wire.appVersion) 不一致，请更新两台 Mac")
-                }
-                guard hello.code == code else { throw WireError.invalid("配对码不正确") }
-                session.authenticated = true
-                try profile.validate()
-                accepted.send(.profile, try Wire.json(profile))
                 return
             }
             switch kind {
@@ -229,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 let pointer = try Wire.decode(PointerUpdate.self, data)
                 try pointer.validate()
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.sessionID == generation else { return }
+                    guard let self, self.sessionID == generation, self.peer === accepted else { return }
                     self.surface.setPointer(pointer)
                 }
             case .heartbeat: accepted.send(.heartbeat)
@@ -237,20 +293,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             default: throw WireError.invalid("接收端收到不支持的消息")
             }
         }
-        accepted.onClose = { [weak self] reason in
+        accepted.onClose = { [weak self, weak accepted] reason in
             session.decoder.stop()
             DispatchQueue.main.async {
-                guard let self, self.sessionID == generation else { return }
-                self.endSession(reason)
+                guard let self, let accepted, self.sessionID == generation else { return }
+                self.candidates.removeValue(forKey: ObjectIdentifier(accepted))
+                guard self.peer === accepted else {
+                    if self.peer == nil { self.record("\(reason) · 监听中 · TCP \(Wire.port)") }
+                    return
+                }
+                self.peer = nil
+                self.receiveLock.lock(); self.receiveSession = nil; self.receiveLock.unlock()
+                self.surface.reset()
+                self.videoWindow?.orderOut(nil); self.videoWindow = nil
+                self.record("\(reason)；接收端仍在监听，可直接重连。")
             }
         }
-        surface.onSubmit = { [weak accepted] sequence in
-            var data = Data(); Wire.append(sequence, to: &data)
-            accepted?.send(.acknowledgment, data)
+        accepted.onState = { [weak self] message in
+            DispatchQueue.main.async {
+                guard let self, self.sessionID == generation else { return }
+                self.record(message)
+            }
         }
-        surface.onFirstImage = { [weak self] in self?.showVideo() }
         accepted.start()
-        statusLabel.stringValue = "正在接收画面…"
     }
 
     private func showVideo() {
@@ -268,13 +333,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusLabel.stringValue = "已连接 · 仅雷雳有线"
     }
 
-    @objc private func sendDisplay() {
-        guard #available(macOS 14.0, *) else { statusLabel.stringValue = "发送扩展屏需要 macOS 14 或更新；这台 Mac 仍可作接收端。"; return }
-        guard CGPreflightScreenCaptureAccess() else {
-            CGRequestScreenCaptureAccess()
-            statusLabel.stringValue = "请在系统设置 → 隐私与安全性 → 屏幕录制中允许 WiredDisplay，然后退出并重新打开。"
-            return
-        }
+    @objc private func sendDisplay() { startConnection(probe: false) }
+    @objc private func testConnection() { startConnection(probe: true) }
+
+    private func startConnection(probe: Bool) {
+        guard #available(macOS 14.0, *) else { statusLabel.stringValue = "发送扩展屏需要 macOS 14 或更新。"; return }
         guard let cable = CableAddress.current() else { statusLabel.stringValue = "请连接雷雳线，并等待雷雳网桥获得地址。"; return }
         let ip = addressField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let code = codeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -286,30 +349,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let limited = quality.indexOfSelectedItem == 1
         connecting = true
         setBusy(true)
-        statusLabel.stringValue = "正在通过雷雳连接…"
+        diagnosticLines.removeAll()
+        record("WiredDisplay \(Wire.appVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        record("本机 \(cable.description) → \(ip):\(Wire.port)")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
-                let peer = try CablePeer.connectWithRetry(ip: ip, cable: cable)
-                DispatchQueue.main.async {
-                    guard let self, self.sessionID == generation else { peer.stop(); peer.start(); return }
+                let peer = try CablePeer.connect(ip: ip, cable: cable)
+                DispatchQueue.main.async { [peer] in
+                    guard let self, self.sessionID == generation else { peer.stop(); return }
                     self.connecting = false
                     self.peer = peer
                     self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
                     var receivedProfile = false
-                    peer.onPacket = { [weak self] kind, data in
-                        guard let self, let connection = self.peer else { return }
-                        DispatchQueue.main.async { self.lastSendPacket = DispatchTime.now().uptimeNanoseconds }
+                    peer.onPacket = { [weak self, weak peer] kind, data in
+                        guard let self, let connection = peer else { return }
+                        DispatchQueue.main.async {
+                            guard self.sessionID == generation else { return }
+                            self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
+                        }
                         switch kind {
                         case .profile:
                             guard !receivedProfile else { throw WireError.invalid("重复屏幕信息") }
-                            receivedProfile = true
                             let profile = try Wire.decode(DisplayProfile.self, data)
                             try profile.validate()
-                            guard profile.appVersion == Wire.appVersion else {
-                                throw WireError.invalid("接收端版本 \(profile.appVersion ?? "旧版") 与发射端 \(Wire.appVersion) 不一致，请更新两台 Mac")
-                            }
+                            receivedProfile = true
                             Task { @MainActor [weak self] in
                                 guard let self, self.sessionID == generation else { return }
+                                self.record("配对通过 · 已收到 \(profile.width) × \(profile.height) 屏幕参数 · 接收端 \(profile.appVersion ?? "未知")")
+                                if probe { self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return }
+                                guard CGPreflightScreenCaptureAccess() else {
+                                    CGRequestScreenCaptureAccess()
+                                    self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
+                                    return
+                                }
                                 let selected = profile.limited(to4K: limited)
                                 let sender = ScreenSender(peer: connection)
                                 self.sender = sender
@@ -333,18 +405,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                 (self.sender as? ScreenSender)?.acknowledge(data)
                             }
                         case .heartbeat: break
-                        case .end: connection.stop()
+                        case .end:
+                            guard data.count < 4096 else { throw WireError.invalid("错误消息过大") }
+                            let reason = String(data: data, encoding: .utf8) ?? "对方结束连接"
+                            DispatchQueue.main.async {
+                                guard self.sessionID == generation else { return }
+                                self.endSession(reason)
+                            }
                         default: throw WireError.invalid("发送端收到不支持的消息")
                         }
                     }
                     peer.onClose = { [weak self] message in
+                        let probeCompleted = probe && receivedProfile
                         DispatchQueue.main.async {
                             guard let self, self.sessionID == generation else { return }
-                            self.endSession(message)
+                            if probeCompleted { return }
+                            let detail = self.transportReady && !probeCompleted && self.sender == nil
+                                ? "TCP 已连接，接收端未完成屏幕参数交换：\(message)。旧版接收端可能因版本或配对码不符而直接断开；请更新两台 Mac。"
+                                : message
+                            self.endSession(detail)
+                        }
+                    }
+                    peer.onState = { [weak self] message in
+                        DispatchQueue.main.async {
+                            guard let self, self.sessionID == generation else { return }
+                            self.record(message)
+                        }
+                    }
+                    peer.onReady = { [weak peer] in
+                        peer?.send(.hello, (try? Wire.json(Hello(version: Wire.protocolVersion, code: code, probe: probe))) ?? Data())
+                        DispatchQueue.main.async {
+                            guard self.sessionID == generation else { return }
+                            self.transportReady = true
+                            self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
+                            self.record("TCP 已连接 · 正在验证配对并交换屏幕参数")
                         }
                     }
                     peer.start()
-                    peer.send(.hello, (try? Wire.json(Hello(version: 1, code: code))) ?? Data())
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -386,14 +483,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func tick() {
         let cable = CableAddress.current()
-        cableLabel.stringValue = cable.map { "雷雳网桥  \($0.ip)" } ?? "雷雳网桥  未就绪"
+        cableLabel.stringValue = cable.map { "雷雳网桥  \($0.ip) · \($0.name)" } ?? "雷雳网桥  未就绪"
         let now = DispatchTime.now().uptimeNanoseconds
         if let peer {
             receiveLock.lock(); let receiver = receiveSession; let last = receiver?.lastSeen; receiveLock.unlock()
-            if let last, now > last, now - last > 8_000_000_000 { endSession("接收超时，请重新连接。"); return }
-            if receiver == nil {
-                peer.send(.heartbeat)
-                if now > lastSendPacket, now - lastSendPacket > 8_000_000_000 { endSession("对方未响应，请检查雷雳连接。"); return }
+            if let last, now > last, now - last > 8_000_000_000 { peer.stop(); return }
+            if receiver == nil && transportReady {
+                if sender != nil { peer.send(.heartbeat) }
+                if now > lastSendPacket, now - lastSendPacket > 8_000_000_000 {
+                    endSession("TCP 已连接，但对方未返回有效协议消息；请检查接收端版本与配对码。")
+                    return
+                }
             }
         }
         if cable == nil && (peer != nil || listener != nil) { endSession("雷雳连接已断开。") }
@@ -405,8 +505,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         stopping = true
         sessionID = UUID()
         connecting = false
+        transportReady = false
         pointerTimer?.invalidate(); pointerTimer = nil
         listener?.stop(); listener = nil
+        for candidate in candidates.values { candidate.stop() }
+        candidates.removeAll()
         peer?.stop(); peer = nil
         receiveLock.lock(); receiveSession = nil; receiveLock.unlock()
         videoWindow?.orderOut(nil); videoWindow = nil
@@ -414,7 +517,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         surface.onSubmit = nil; surface.onFirstImage = nil
         pairingLabel.stringValue = ""
         metricsLabel.stringValue = ""
-        statusLabel.stringValue = message
+        record(message)
         setBusy(true)
         let previous = sender
         sender = nil
@@ -425,9 +528,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self.quitting { NSApp.reply(toApplicationShouldTerminate: true) }
         }
     }
+    private func record(_ message: String) {
+        diagnosticLines.append("\(ISO8601DateFormatter().string(from: Date())) \(message)")
+        if diagnosticLines.count > 100 { diagnosticLines.removeFirst() }
+        statusLabel.stringValue = message
+        NSLog("%@", message)
+    }
+    @objc private func copyDiagnostics() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnosticLines.joined(separator: "\n"), forType: .string)
+    }
+    @objc private func openNetworkSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork")!)
+    }
     @objc private func about() {
         let alert = NSAlert()
-        alert.messageText = "WiredDisplay 0.1"
+        alert.messageText = "WiredDisplay \(Wire.appVersion)"
         alert.informativeText = "仅雷雳有线扩展屏。采用 macOS 原生采集、硬件编解码与原生画面显示。\n\n部分虚拟屏与消息封装思路来自 TargetBridge（MIT，Marco Caciotti）。独立实现，不与 Duet 私有协议互通。"
         alert.runModal()
     }

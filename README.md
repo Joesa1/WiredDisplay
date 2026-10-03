@@ -1,100 +1,139 @@
 # WiredDisplay
 
-WiredDisplay turns one Mac into a wired extended display for another Mac over a direct
-Thunderbolt 3 or newer cable. The app contains both roles:
+A lightweight Mac-to-Mac extended display over a Thunderbolt 3 or newer cable.
+One app contains both roles. The **MacBook sender** creates and captures a virtual
+extended desktop. The **iMac receiver** decodes and displays the incoming video.
+There is no account, subscription, audio transport, or Duet protocol compatibility.
 
-- **Receiver**: normally run this on the iMac. It creates the virtual display and shows
-  the incoming video.
-- **Sender**: normally run this on the MacBook. It captures the extended desktop and
-  sends it to the iMac.
+## Downloads: 0.2.0 preview
 
-Install the same app on both Macs. There is no separate receiver application and no
-account, subscription, wireless transport, audio path, or plugin.
+Install **0.2.0 on both Macs**. Older receivers can close the connection silently
+when the sender reports a different application version.
 
-## Downloads
+- [Apple silicon / arm64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.0/WiredDisplay-arm64.zip)
+- [Intel / x86_64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.2.0/WiredDisplay-x86_64.zip)
+- [Release and checksums](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.2.0)
 
-Choose the package that matches the Mac where it will run:
+M-series Macs use arm64. Intel Macs use x86_64. Sender and receiver use the same app;
+choose the package for the processor of the Mac where it will run.
+Quit the old app, extract the ZIP, and replace the app in `/Applications`.
+Launch that copy, not an older copy in Downloads. Confirm the version in the window.
 
-- [Apple silicon / arm64](https://github.com/Joesa1/WiredDisplay/releases/latest/download/WiredDisplay-arm64.zip)
-- [Intel / x86_64](https://github.com/Joesa1/WiredDisplay/releases/latest/download/WiredDisplay-x86_64.zip)
+## Requirements and setup
 
-The arm64 package is for M1/M2/M3/M4 Macs. The x86_64 package is for Intel Macs. If the
-two Macs use different processor families, download one package for each Mac.
+- Sender: macOS 14 or later. Receiver: macOS 12.3 or later.
+- A Thunderbolt data cable, not a charging-only USB-C cable.
+- Thunderbolt Bridge enabled on both Macs.
+- Local Network permission for WiredDisplay on recent macOS versions.
+- Screen Recording permission on the sender, required only for actual streaming.
 
-## Requirements
+For the fixed-address setup, configure Thunderbolt Bridge as follows:
 
-- Two Macs connected with a Thunderbolt 3 or newer data cable.
-- **Thunderbolt Bridge** enabled on both Macs, with an IPv4 address assigned.
-- macOS 14 or later on the sender, because ScreenCaptureKit is used for desktop capture.
-- macOS 12.3 or later on the receiver.
-- Screen Recording permission for WiredDisplay on the sender.
+| Setting | MacBook sender | iMac receiver |
+| --- | --- | --- |
+| IPv4 | Manual | Manual |
+| IP address | `10.10.10.2` | `10.10.10.3` |
+| Subnet mask | `255.255.255.0` | `255.255.255.0` |
+| Router / DNS | Empty | Empty |
 
-For the most deterministic Duet-style setup, configure **Thunderbolt Bridge** manually on
-both Macs: use `10.10.10.2` on the MacBook, `10.10.10.3` on the iMac, and
-`255.255.255.0` as the subnet mask. Leave Router and DNS empty. The last octet must be
-different on the two Macs. WiredDisplay also accepts macOS automatic `169.254.x.x`
-addresses, but fixed addresses make troubleshooting and reconnection more predictable.
+Avoid an address range already used by another network or VPN. Automatic
+`169.254.x.x` addresses remain supported, but that path has not been validated in
+the 0.2.0 preview. A fixed IP does not itself reduce video latency.
 
-## Quick start
+## First connection
 
-1. Connect the cable and wait for **Thunderbolt Bridge** to show an address in Network
-   settings on both Macs.
-2. Launch WiredDisplay on the iMac, click **Start receiver**, and note its cable address
-   and six digit pairing code.
-3. Launch WiredDisplay on the MacBook, enter the iMac address and pairing code, select
-   **Native** or **4K cap**, then click **Send display**.
-4. Grant Screen Recording permission when macOS requests it, then relaunch WiredDisplay
-   if macOS asks.
-5. The iMac opens the received display full screen. Arrange the display in **System
-   Settings > Displays** on the MacBook.
+1. On the iMac, click **将这台 Mac 用作显示器**. Wait for **监听中 · TCP 54321**.
+2. On the MacBook, enter the receiver address and its current six-digit pairing code.
+   Bonjour fills an empty address field if exactly one compatible receiver is found;
+   manual entry remains available if discovery is blocked.
+3. Click **测试连接** first. It checks TCP, the pairing code, and screen parameters.
+   It does not request Screen Recording, create a display, or replace a running session.
+4. After the test succeeds, select quality and click **扩展到这台 Mac**.
+5. Allow Screen Recording when requested and reconnect. If macOS asks for a relaunch,
+   quit and reopen the app.
+6. Arrange the virtual display in the MacBook's **System Settings > Displays**.
 
-The receiver status must show `监听中 · TCP 54321` before the sender connects. If the
-sender reports `Connection refused`, run `lsof -nP -iTCP:54321 -sTCP:LISTEN` on the iMac;
-the receiver process must be listed.
+The receiver stays listening after invalid clients, failed pairing, and disconnects.
+A new client replaces the active session only after valid pairing. **断开** stops
+both the session and listening. The visible app version identifies the installed
+build; protocol version determines compatibility in 0.2.0 and later.
 
-The current app version and protocol version are shown at the bottom of both windows.
-Both Macs must run the same app version. A mismatched version is rejected during the
-handshake with an explicit error.
+## Connection diagnostics
 
-The first connection can take a few seconds while macOS creates the virtual display.
-Keep the cable connected while the session is active. Click **Disconnect** in either
-window to stop the session.
+The window reports TCP path selection, TCP readiness, pairing, and screen-profile
+receipt separately. **拷贝诊断** copies the attempt history without the pairing code.
+**本地网络设置** opens the relevant macOS privacy settings page.
 
-## First launch on macOS
+| Result | Meaning / next step |
+| --- | --- |
+| No Thunderbolt address | Check the physical cable and Thunderbolt Bridge configuration. |
+| `localNetworkDenied` | macOS denied this app local-network access; inspect its permission. |
+| TCP waiting / timeout | Inspect the recorded interface and path reason, receiver listener, and network filters. |
+| TCP ready, then EOF before profile | Transport worked; check receiver version and pairing. Older versions do not send a rejection reason. |
+| Pairing or protocol rejection | Correct the code or update the incompatible app. |
+| Test succeeds, capture fails | Investigate Screen Recording, virtual display, or hardware codec support. |
 
-The release is ad hoc signed because it is distributed outside the Mac App Store. If
-macOS blocks the first launch, Control click `WiredDisplay.app`, choose **Open**, and
-confirm. The same action is available in **System Settings > Privacy & Security > Open
-Anyway**.
+An enabled app, Screen Recording permission, and a disabled firewall do not prove
+that macOS permits outgoing local-network access. Likewise, a successful terminal
+probe does not prove that the app has the same effective permissions.
 
-## Design
+The preview is ad hoc signed. macOS local-network identity tracking may be less
+reliable across ad hoc rebuilds than with an Apple-issued signing identity. No
+Apple-issued signing identity is available on the build machine. Do not disable
+system-wide privacy or firewall protections as a workaround.
 
-The implementation is independent of Duet's closed protocol. It uses the same classes of
-latency-sensitive techniques observed in the local Duet binary: a direct Thunderbolt
-network path, VideoToolbox hardware codecs, no frame reordering, a bounded frame queue,
-immediate presentation, and a coalesced cursor channel. The receiver uses the native
-`AVSampleBufferDisplayLayer` path instead of passing decoded frames through SDL.
+If Gatekeeper blocks first launch, use Finder's **Open** or the app-specific
+**Open Anyway** action in Privacy & Security. The app is not notarized.
 
-The virtual display declarations and license retained from TargetBridge are included in
-`LICENSE-TargetBridge.txt`.
+## Transport design
 
-## Build from source
+- Native Network.framework `NWConnection` and `NWListener`.
+- Sender uses the Thunderbolt local endpoint, prohibits Wi-Fi/cellular, and verifies
+  the actual local endpoint after connection. Link-local IPv4 hosts are interface-scoped.
+- Wildcard receiver listener; accepted connections must use the current Thunderbolt
+  local address before processing the application protocol.
+- Bonjour `_wireddisplay._tcp` advertises address, interface, app and protocol version.
+- TCP_NODELAY, interactive-video service class, bounded frame budget, hardware
+  VideoToolbox encoding/decoding, and immediate native video presentation.
+- Five-second deadline and eight-candidate limit for unauthenticated clients.
+- Protocol-aware probes never become display sessions. Bad clients do not stop listening.
+
+This is an independent implementation. We have not established Duet's proprietary
+transport or matched its latency. TargetBridge's virtual-display declarations and
+MIT notice are retained in `LICENSE-TargetBridge.txt`.
+
+## Validation status
+
+0.2.0 is a preview, not a confirmed end-to-end fix:
+
+- Both architectures compile and packaged app signatures verify.
+- Native arm64 transport check passes fragmented/coalesced frames, oversized packet
+  rejection, disconnect/reconnect, and exactly-once close notification.
+- Running app receiver checks pass wrong-code and protocol rejection, idle-client
+  timeout, malformed input, probes during an active session, authenticated replacement,
+  and listener survival after disconnect.
+- On the connected Macs, Network.framework established TCP to `10.10.10.3:54321`
+  using `bridge0` in approximately 1 ms. The old receiver then closed after Hello
+  without returning a profile. This measures connection setup, **not display latency**.
+- Both-Mac 0.2.0 streaming, Intel runtime, Bonjour discovery between two machines,
+  automatic link-local addressing, and end-to-end latency still need validation.
+
+See [validation notes](docs/validation-0.2.0.md).
+
+## Build and checks
 
 ```sh
 ./build.sh
+xcrun swiftc -swift-version 5 Sources/Cable.swift Sources/Wire.swift \
+  Tests/TransportCheck.swift -o /private/tmp/wireddisplay-transport-check \
+  -framework Network -framework SystemConfiguration
+/private/tmp/wireddisplay-transport-check
+# Start a local app receiver first; replace the address and current pairing code:
+python3 Tests/ReceiverCheck.py 10.10.10.2 CURRENT_PAIRING_CODE
 ```
 
-The script produces two signed packages:
-
-- `dist/WiredDisplay-arm64.zip`
-- `dist/WiredDisplay-x86_64.zip`
-
-The local Command Line Tools do not ship an x86_64 Swift compatibility archive. The build
-therefore disables autolinking for that optional compatibility library; the application
-source still compiles for both architectures.
-
-## Current limits
-
-This release has been compile checked, signed, and launch checked locally. A real two Mac
-Thunderbolt session is still required to measure latency and confirm behavior on each
-specific iMac panel. Audio and wireless transport are intentionally out of scope.
+Packages and SHA-256 checksums are written to `dist/`. Signing happens in a temporary
+directory outside Desktop/iCloud so File Provider metadata cannot break signing.
+Set `WIRED_SIGN_IDENTITY` to an installed Apple-issued code-signing identity for a
+signed development build; default is ad hoc. The bundle/signing identifier is the
+same for both CPU architectures.

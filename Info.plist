@@ -6,10 +6,11 @@
 <key>CFBundleName</key><string>WiredDisplay</string>
 <key>CFBundleDisplayName</key><string>WiredDisplay</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1.4</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>0.2.0</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>LSMinimumSystemVersion</key><string>12.3</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSScreenCaptureUsageDescription</key><string>将扩展桌面通过雷雳线显示在另一台 Mac。</string>
 <key>NSLocalNetworkUsageDescription</key><string>仅通过雷雳网桥连接另一台 Mac。</string>
+<key>NSBonjourServices</key><array><string>_wireddisplay._tcp</string></array>
 </dict></plist>
