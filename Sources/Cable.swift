@@ -120,6 +120,21 @@ final class CablePeer {
         } catch { Darwin.close(fd); throw error }
     }
 
+    static func connectWithRetry(ip: String, cable: CableAddress, attempts: Int = 4) throws -> CablePeer {
+        var lastError: Error?
+        for attempt in 0..<max(1, attempts) {
+            do {
+                return try connect(ip: ip, cable: cable)
+            } catch {
+                lastError = error
+                if attempt + 1 < max(1, attempts) {
+                    Thread.sleep(forTimeInterval: 0.5)
+                }
+            }
+        }
+        throw lastError ?? WireError.invalid("无法连接接收端")
+    }
+
     func start() {
         DispatchQueue(label: "wired.read", qos: .userInteractive).async { [self] in
             var reason = "连接已断开"
