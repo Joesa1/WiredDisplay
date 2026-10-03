@@ -163,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             listener.start()
             pairingLabel.stringValue = "地址 \(cable.ip)    配对码 \(code)"
-            statusLabel.stringValue = "在 MacBook 填入地址与配对码。接收后自动全屏，Esc 返回。"
+            statusLabel.stringValue = "监听中 · TCP \(Wire.port)\n在 MacBook 填入地址与配对码。接收后自动全屏，Esc 返回。"
             setBusy(true)
         } catch { statusLabel.stringValue = error.localizedDescription }
     }
