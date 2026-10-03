@@ -66,6 +66,11 @@ print('PASS: idle candidate expires without stopping listener')
 with connect() as active:
     hello(active, args.code, False)
     assert read(active)[0] == 2
+    # A malformed/early cursor is best-effort and must not end the video session.
+    packet(active, 6, b'{"x":9999}')
+    packet(active, 7)
+    assert read(active)[0] == 7
+    print('PASS: invalid early cursor does not interrupt the session')
     probe()
     packet(active, 7)
     assert read(active)[0] == 7
