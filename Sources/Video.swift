@@ -112,6 +112,7 @@ final class VideoSurface: NSView {
     private var scheduled = false
     private var generation = 0
     private var pointer: PointerUpdate?
+    private var sourceAspect: CGFloat = 16.0 / 9.0
     var onSubmit: ((UInt64) -> Void)?
     var onFirstImage: (() -> Void)?
     private var hasImage = false
@@ -122,7 +123,7 @@ final class VideoSurface: NSView {
         layer?.backgroundColor = NSColor.black.cgColor
         videoLayer.videoGravity = .resizeAspect
         layer?.addSublayer(videoLayer)
-        cursorLayer.contentsGravity = .resize
+        cursorLayer.contentsGravity = .resizeAspect
         cursorLayer.isHidden = true
         layer?.addSublayer(cursorLayer)
     }
@@ -145,35 +146,54 @@ final class VideoSurface: NSView {
         imageLock.unlock()
         guard shouldSchedule else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.imageLock.lock()
-            guard expectedGeneration == self.generation else { self.imageLock.unlock(); return }
-            let current = self.newest
-            self.newest = nil
-            self.scheduled = false
-            self.imageLock.unlock()
-            guard let (image, sequence) = current else { return }
-            var format: CMVideoFormatDescription?
-            guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: image,
-                formatDescriptionOut: &format) == noErr, let format else { return }
-            var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
-            var sample: CMSampleBuffer?
-            guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: image,
-                formatDescription: format, sampleTiming: &timing, sampleBufferOut: &sample) == noErr,
-                  let sample else { return }
-            CMSetAttachment(sample, key: kCMSampleAttachmentKey_DisplayImmediately,
-                            value: kCFBooleanTrue, attachmentMode: kCMAttachmentMode_ShouldPropagate)
-            if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true) {
-                let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
-                CFDictionarySetValue(dict, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
-                                     Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
-            }
-            // Only decoded images may be superseded; compressed dependencies remain intact.
-            if self.videoLayer.status == .failed || !self.videoLayer.isReadyForMoreMediaData { self.videoLayer.flush() }
-            self.videoLayer.enqueue(sample)
-            self.onSubmit?(sequence)
-            if !self.hasImage { self.hasImage = true; self.onFirstImage?() }
+            self?.renderLatest(expectedGeneration)
         }
+    }
+
+    private func renderLatest(_ expectedGeneration: Int) {
+        imageLock.lock()
+        guard expectedGeneration == generation, let current = newest else {
+            scheduled = false
+            imageLock.unlock()
+            return
+        }
+        // Keep the displayed frame while AVFoundation drains. Flushing on ordinary
+        // backpressure causes the visible black flash reported when cursor traffic starts.
+        guard videoLayer.isReadyForMoreMediaData else {
+            imageLock.unlock()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 120.0) { [weak self] in
+                self?.renderLatest(expectedGeneration)
+            }
+            return
+        }
+        newest = nil
+        scheduled = false
+        imageLock.unlock()
+
+        let (image, sequence) = current
+        sourceAspect = CGFloat(CVPixelBufferGetWidth(image)) / max(CGFloat(1), CGFloat(CVPixelBufferGetHeight(image)))
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        updatePointerFrame()
+        CATransaction.commit()
+        var format: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: image,
+            formatDescriptionOut: &format) == noErr, let format else { return }
+        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: image,
+            formatDescription: format, sampleTiming: &timing, sampleBufferOut: &sample) == noErr,
+              let sample else { return }
+        CMSetAttachment(sample, key: kCMSampleAttachmentKey_DisplayImmediately,
+                        value: kCFBooleanTrue, attachmentMode: kCMAttachmentMode_ShouldPropagate)
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true) {
+            let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+            CFDictionarySetValue(dict, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+        }
+        if videoLayer.status == .failed { videoLayer.flush() }
+        videoLayer.enqueue(sample)
+        onSubmit?(sequence)
+        if !hasImage { hasImage = true; onFirstImage?() }
     }
 
     func setPointer(_ value: PointerUpdate) {
@@ -192,18 +212,28 @@ final class VideoSurface: NSView {
     private func updatePointerFrame() {
         guard let pointer else { cursorLayer.isHidden = true; return }
         cursorLayer.isHidden = !pointer.visible
-        // Video is always 16:9 for the supported iMac panels.
-        let rect = AVMakeRect(aspectRatio: CGSize(width: 16, height: 9), insideRect: bounds)
-        let scale = window?.backingScaleFactor ?? 2
-        let w = pointer.width / scale, h = pointer.height / scale
-        cursorLayer.frame = CGRect(x: rect.minX + pointer.x * rect.width - pointer.hotX / scale,
-            y: rect.maxY - pointer.y * rect.height - h + pointer.hotY / scale, width: w, height: h)
+        let rect = AVMakeRect(aspectRatio: CGSize(width: sourceAspect, height: 1), insideRect: bounds)
+        let size: CGSize
+        let hotspot: CGPoint
+        if pointer.png == nil {
+            // Standard cursors are drawn from the receiver's own Retina asset.
+            size = NSCursor.arrow.image.size
+            hotspot = NSCursor.arrow.hotSpot
+        } else {
+            let scale = window?.backingScaleFactor ?? 2
+            size = CGSize(width: pointer.width / scale, height: pointer.height / scale)
+            hotspot = CGPoint(x: pointer.hotX / scale, y: pointer.hotY / scale)
+        }
+        cursorLayer.frame = CGRect(x: rect.minX + pointer.x * rect.width - hotspot.x,
+            y: rect.maxY - pointer.y * rect.height - size.height + hotspot.y,
+            width: size.width, height: size.height)
     }
     func reset() {
         imageLock.lock(); generation += 1; newest = nil; scheduled = false; imageLock.unlock()
         videoLayer.flushAndRemoveImage()
         cursorLayer.isHidden = true
         pointer = nil
+        sourceAspect = 16.0 / 9.0
         hasImage = false
     }
 }
