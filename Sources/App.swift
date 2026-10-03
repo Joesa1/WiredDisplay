@@ -289,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusLabel.stringValue = "正在通过雷雳连接…"
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
-                let peer = try CablePeer.connect(ip: ip, cable: cable)
+                let peer = try CablePeer.connectWithRetry(ip: ip, cable: cable)
                 DispatchQueue.main.async {
                     guard let self, self.sessionID == generation else { peer.stop(); peer.start(); return }
                     self.connecting = false
