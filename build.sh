@@ -20,7 +20,11 @@ for architecture in arm64 x86_64; do
     cp "build/$architecture/WiredDisplay" "$app/Contents/MacOS/WiredDisplay"
     cp Info.plist "$app/Contents/Info.plist"
     cp LICENSE-TargetBridge.txt "$app/Contents/Resources/"
+    rm -rf "$app/Contents/_CodeSignature"
     xattr -cr "$app" 2>/dev/null || true
+    xattr -d com.apple.FinderInfo "$app" 2>/dev/null || true
+    xattr -d com.apple.fileprovider.fpfs#P "$app" 2>/dev/null || true
+    xattr -d com.apple.provenance "$app" 2>/dev/null || true
     codesign --force --sign - --identifier "local.wired-display.$architecture" "$app"
     xattr -cr "$app" 2>/dev/null || true
     xattr -d com.apple.FinderInfo "$app" 2>/dev/null || true
