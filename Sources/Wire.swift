@@ -17,7 +17,7 @@ enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
     static let protocolVersion = 1
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -67,6 +67,9 @@ struct DisplayProfile: Codable {
     let hiDPI: Bool
     let hevc: Bool
     let appVersion: String?
+
+    var logicalWidth: Int { hiDPI ? width / 2 : width }
+    var logicalHeight: Int { hiDPI ? height / 2 : height }
 
     func validate() throws {
         guard (640...5120).contains(width), (480...2880).contains(height),

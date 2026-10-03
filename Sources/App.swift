@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var pointerTimer: Timer?
     private var monitorTimer: Timer?
     private var pointerStarted = false
+    private var receiverCursorHidden = false
     private var ticks = 0
     private var sessionID = UUID()
     private var code = ""
@@ -210,20 +211,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let modes = CGDisplayCopyAllDisplayModes(id, nil) as? [CGDisplayMode] ?? []
         let native = modes.filter { $0.pixelWidth <= 5120 && $0.pixelHeight <= 2880 }
             .max { $0.pixelWidth * $0.pixelHeight < $1.pixelWidth * $1.pixelHeight }
-        var width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
-        var height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
-        var hiDPI = screen.backingScaleFactor > 1
-        // A 5K Retina iMac advertises 4480x2520 physical pixels but its default
-        // display mode is 2240x1260. Stream the selected mode, not the panel's
-        // physical backing size, so the sender does not need a 5K encoder.
+        let width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
+        let height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
+        let hiDPI = screen.backingScaleFactor > 1
+        // 2240x1260 is the M1 iMac's logical desktop size. It still needs a
+        // 4480x2520 backing stream to remain sharp on the 5K Retina panel.
         if width > 3840 && height > 2160 && hiDPI {
-            width = 2240
-            height = 1260
-            hiDPI = false
+            return DisplayProfile(width: 4480, height: 2520, hiDPI: true,
+                                  hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+                                  appVersion: Wire.appVersion)
         } else if width >= 2500 && width <= 3200 && height >= 1400 && height <= 1800 {
-            width = 2560
-            height = 1440
-            hiDPI = false
+            return DisplayProfile(width: 2560, height: 1440, hiDPI: false,
+                                  hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+                                  appVersion: Wire.appVersion)
         }
         return DisplayProfile(width: width, height: height, hiDPI: hiDPI,
                               hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
@@ -345,6 +345,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         videoWindow = video
         video.makeKeyAndOrderFront(nil)
         video.toggleFullScreen(nil)
+        NSCursor.hide()
+        receiverCursorHidden = true
         statusLabel.stringValue = "已连接 · 仅雷雳有线"
     }
 
@@ -391,18 +393,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                             receivedProfile = true
                             Task { @MainActor [weak self] in
                                 guard let self, self.sessionID == generation else { return }
-                                self.record("配对通过 · 已收到 \(profile.width) × \(profile.height) 屏幕参数 · 接收端 \(profile.appVersion ?? "未知")")
+                                let mode = "\(profile.logicalWidth) × \(profile.logicalHeight)"
+                                let backing = profile.hiDPI ? " · Retina 视频 \(profile.width) × \(profile.height)" : ""
+                                self.record("配对通过 · 显示模式 \(mode)\(backing) · 接收端 \(profile.appVersion ?? "未知")")
                                 if probe { self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return }
                                 guard CGPreflightScreenCaptureAccess() else {
                                     CGRequestScreenCaptureAccess()
                                     self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
                                     return
                                 }
-                                let needs4KCap = limited || profile.width > 3840 || profile.height > 2160
-                                let selected = profile.limited(to4K: needs4KCap)
-                                if needs4KCap && !limited {
-                                    self.record("接收端为 5K/超 4K 面板，自动使用 4K 硬件兼容档 · \(selected.width) × \(selected.height)")
-                                }
+                                let selected = profile.limited(to4K: limited)
+                                if limited { self.record("已选择 4K 兼容档 · 文字清晰度会低于原生 Retina 档") }
                                 let sender = ScreenSender(peer: connection)
                                 self.sender = sender
                                 sender.onFailure = { [weak self] message in self?.fail(message) }
@@ -421,7 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                 do {
                                     try await sender.start(profile: selected)
                                     guard self.sessionID == generation else { await sender.stop(); return }
-                                    self.statusLabel.stringValue = "已扩展 · \(selected.width) × \(selected.height) · 60 帧目标\n在系统设置 → 显示器中调整屏幕排列。"
+                                    self.statusLabel.stringValue = "已扩展 · \(selected.logicalWidth) × \(selected.logicalHeight)\(selected.hiDPI ? " Retina" : "") · 60 帧目标\n在系统设置 → 显示器中调整屏幕排列。"
                                 } catch {
                                     if self.sessionID == generation {
                                         self.record("发送端视频启动失败：\(error.localizedDescription)")
@@ -496,7 +497,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let location = event.location
             let pointer = PointerUpdate(x: (location.x - rect.minX) / rect.width,
                 y: (location.y - rect.minY) / rect.height, visible: rect.contains(location),
-                hotX: 0, hotY: 0, width: 32, height: 32, png: nil)
+                hotX: 0, hotY: 0, width: 0, height: 0, png: nil)
             let bounded = PointerUpdate(x: min(2, max(-2, pointer.x)), y: min(2, max(-2, pointer.y)),
                 visible: pointer.visible, hotX: pointer.hotX, hotY: pointer.hotY,
                 width: pointer.width, height: pointer.height, png: pointer.png)
@@ -532,6 +533,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         connecting = false
         transportReady = false
         pointerStarted = false
+        if receiverCursorHidden { NSCursor.unhide(); receiverCursorHidden = false }
         pointerTimer?.invalidate(); pointerTimer = nil
         listener?.stop(); listener = nil
         for candidate in candidates.values { candidate.stop() }
