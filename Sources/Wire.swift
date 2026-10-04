@@ -17,7 +17,7 @@ enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
     static let protocolVersion = 2
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.1"
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.2"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -62,9 +62,11 @@ struct Hello: Codable {
     let identity: PeerIdentity?
     let address: String?
     let receiverCode: String?
+    let preventDisplaySleep: Bool?
 
     init(version: Int, code: String, appVersion: String = Wire.appVersion, probe: Bool = false,
-         identity: PeerIdentity? = nil, address: String? = nil, receiverCode: String? = nil) {
+         identity: PeerIdentity? = nil, address: String? = nil, receiverCode: String? = nil,
+         preventDisplaySleep: Bool? = nil) {
         self.version = version
         self.probe = probe
         self.code = code
@@ -72,6 +74,7 @@ struct Hello: Codable {
         self.identity = identity
         self.address = address
         self.receiverCode = receiverCode
+        self.preventDisplaySleep = preventDisplaySleep
     }
 }
 

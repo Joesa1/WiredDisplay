@@ -64,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var contentStack: NSStackView!
     private var toolbarTitle: NSTextField!
     private var sleepActivity: NSObjectProtocol?
+    private var receiverKeepAwake = true
+    private var remoteSleepRequested = true
     private var webView: WKWebView?
     private let roleLabel = NSTextField(labelWithString: "本机作为主机")
     private let connectionStateLabel = NSTextField(labelWithString: "未连接")
@@ -274,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
           const role = () => document.querySelector('[data-local-role].active')?.dataset.localRole || 'host';
           const output = () => document.querySelector('[data-output-mode].active')?.dataset.outputMode || 'extend';
           const audio = () => document.getElementById('audio-relay')?.classList.contains('on') || false;
+          const preventSleep = () => document.getElementById('prevent-sleep')?.classList.contains('on') || false;
           const selectedDevice = () => {
             try {
               const all = JSON.parse(localStorage.getItem('tb-mvp-devices') || '[]');
@@ -287,20 +290,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if (button.id === 'toolbar-connect') {
               event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
-              post('session', { role: role(), output: output(), audio: audio(), address: device.ip || '', code: device.pairingCode || '' });
+              post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), address: device.ip || '', code: device.pairingCode || '' });
             } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
-              event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
               post('test', { address: device.ip || '', code: device.pairingCode || '' });
             } else if (button.id === 'refresh') {
               event.preventDefault(); event.stopImmediatePropagation(); post('refresh');
             } else if (button.id === 'modal-save') {
               const device = {
-                name: document.getElementById('device-name')?.value || '',
                 address: document.getElementById('device-ip')?.value || '',
                 code: document.getElementById('device-code')?.value || ''
               };
-              setTimeout(() => post('device', device), 0);
+              post('device', device);
             } else if (button.matches('[data-local-role]')) {
               setTimeout(() => {
                 if (!document.querySelector('#role-modal.show')) post('role', { role: button.dataset.localRole });
@@ -308,7 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             } else if (button.id === 'role-confirm') {
               setTimeout(() => post('role', { role: role() }), 0);
             } else if (button.id === 'prevent-sleep') {
-              setTimeout(() => post('preventSleep', { enabled: button.classList.contains('on') }), 0);
+              setTimeout(() => post('preventSleep', { enabled: button.classList.contains('on'), role: role() }), 0);
             } else if (button.matches('[data-app-icon]')) {
               post('icon', { value: button.dataset.appIcon });
             } else if (button.matches('[data-settings]')) {
@@ -341,14 +342,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               window.__thunderListening = active;
               renderDetail();
             },
-            connection(live, roleName, message) {
-              const device = selected();
-              if (live && device.id) { connectedId = device.id; device.state = 'online'; device.last = '刚刚'; }
-              else connectedId = null;
+            connection(live, roleName, message, peerId) {
+              const device = peerId ? devices.find((item) => item.peerId === peerId) : devices.find((item) => item.id === connectedId) || selected();
+              if (live && device?.id) { delete metricsByDevice[device.id]; connectedId = device.id; selectedId = device.id; showingLocal = false; device.state = 'online'; device.last = '刚刚'; }
+              else if (connectedId) { const active = devices.find((item) => item.id === connectedId); if (active) active.state = 'away'; connectedId = null; }
+              persist();
               renderDevices();
               if (message) showToast(message);
             },
-            diagnostics(ip, ready, host, os, summary, cableDetail) {
+            diagnostics(ip, ready, host, model, os, summary, cableDetail) {
+              window.__thunderLocal = { name: host, model, os, ip };
               const link = document.getElementById('diag-link');
               const detail = document.getElementById('diag-link-detail');
               const cable = document.getElementById('diag-cable');
@@ -357,6 +360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               if (cable) cable.textContent = summary || (ready ? '已检测' : '未检测');
               const cableDetailNode = document.getElementById('diag-cable-detail');
               if (cableDetailNode) cableDetailNode.textContent = cableDetail || '点击检测读取系统报告。';
+              if (showingLocal) renderDetail();
             },
             upsertDevice(peer) {
               if (!peer || !peer.id) return;
@@ -370,16 +374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               persist(); renderDevices();
             },
             metrics(stats) {
-              if (!stats) return;
-              document.getElementById('metric-throughput').textContent = Number(stats.megabitsPerSecond || 0).toFixed(1);
-              document.getElementById('metric-fps').textContent = Number(stats.fps || 0).toFixed(0);
-              document.getElementById('metric-latency').textContent = Number(stats.roundTripMilliseconds || 0).toFixed(0);
-              document.getElementById('metric-codec').textContent = stats.codec || '—';
-              document.getElementById('graph-value').textContent = `${Number(stats.megabitsPerSecond || 0).toFixed(1)} Mbit/s`;
-              const values = (stats.samples || []).slice(-60); const max = Math.max(1, ...values);
-              const path = values.map((value, index) => `${index ? 'L' : 'M'}${(index / Math.max(1, values.length - 1)) * 600} ${29 - value / max * 25}`).join(' ') || 'M0 28 L600 28';
-              document.getElementById('graph-line').setAttribute('d', path);
-              document.getElementById('graph-line').setAttribute('stroke', '#34c759');
+              if (typeof storeMetrics === 'function') storeMetrics(stats);
             },
             version(version, protocol) {
               senderVersion = version;
@@ -441,6 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if address.isEmpty || codeField.stringValue.isEmpty { prototypeToast("请先添加接收端地址和配对码"); return }
             mirrorRequested = body["output"] as? String == "mirror"
             audioRequested = body["audio"] as? Bool ?? true
+            remoteSleepRequested = body["preventSleep"] as? Bool ?? true
             startConnection(probe: false)
         case "test":
             let address = body["address"] as? String ?? ""
@@ -461,8 +457,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if display && listener == nil && peer == nil { receive() }
             if !display { prototypePairing(address: nil, code: nil) }
         case "preventSleep":
-            UserDefaults.standard.set(body["enabled"] as? Bool ?? false, forKey: "preventDisplaySleep")
-            updateSleepActivity()
+            if body["role"] as? String == "host" {
+                remoteSleepRequested = body["enabled"] as? Bool ?? true
+            } else {
+                UserDefaults.standard.set(body["enabled"] as? Bool ?? true, forKey: "preventDisplaySleep")
+                updateSleepActivity()
+            }
         case "icon":
             let value = body["value"] as? String == "two" ? "two" : "one"
             UserDefaults.standard.set(value, forKey: "appIcon")
@@ -498,17 +498,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         webView?.evaluateJavaScript("window.ThunderDisplayNative?.listening(\(active ? "true" : "false"));", completionHandler: nil)
     }
 
-    private func prototypeConnection(_ live: Bool, message: String? = nil) {
+    private func prototypeConnection(_ live: Bool, message: String? = nil, peerID: String? = nil) {
         let messageValue = message.map(javaScriptString) ?? "null"
-        webView?.evaluateJavaScript("window.ThunderDisplayNative?.connection(\(live ? "true" : "false"), \(UserDefaults.standard.bool(forKey: "displayRole") ? "'display'" : "'host'"), \(messageValue));", completionHandler: nil)
+        let peerValue = peerID.map(javaScriptString) ?? "null"
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.connection(\(live ? "true" : "false"), \(UserDefaults.standard.bool(forKey: "displayRole") ? "'display'" : "'host'"), \(messageValue), \(peerValue));", completionHandler: nil)
     }
 
     private func prototypeDiagnostics(_ cable: CableAddress?) {
         let address = cable?.ip ?? ""
         let ready = cable != nil ? "true" : "false"
-        let host = ProcessInfo.processInfo.hostName
+        let identity = localIdentity
         let report = ThunderboltInspector.report(cable: cable)
-        let script = "window.ThunderDisplayNative?.diagnostics(\(javaScriptString(address)), \(ready), \(javaScriptString(host)), \(javaScriptString(ProcessInfo.processInfo.operatingSystemVersionString)), \(javaScriptString(report.summary)), \(javaScriptString(report.detail)));"
+        let script = "window.ThunderDisplayNative?.diagnostics(\(javaScriptString(address)), \(ready), \(javaScriptString(identity.name)), \(javaScriptString(identity.model)), \(javaScriptString(identity.systemVersion)), \(javaScriptString(report.summary)), \(javaScriptString(report.detail)));"
         webView?.evaluateJavaScript(script, completionHandler: nil)
     }
 
@@ -762,10 +763,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         record("偏好设置已恢复默认")
     }
     private func updateSleepActivity() {
-        let enabled = UserDefaults.standard.bool(forKey: "preventDisplaySleep")
-        if enabled && videoWindow != nil && sleepActivity == nil {
+        let enabled = UserDefaults.standard.object(forKey: "preventDisplaySleep") == nil || UserDefaults.standard.bool(forKey: "preventDisplaySleep")
+        if enabled && receiverKeepAwake && videoWindow != nil && sleepActivity == nil {
             sleepActivity = ProcessInfo.processInfo.beginActivity(options: [.idleDisplaySleepDisabled, .automaticTerminationDisabled], reason: "WiredDisplay display session")
-        } else if (!enabled || videoWindow == nil), let activity = sleepActivity {
+        } else if (!enabled || !receiverKeepAwake || videoWindow == nil), let activity = sleepActivity {
             ProcessInfo.processInfo.endActivity(activity)
             sleepActivity = nil
         }
@@ -880,7 +881,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                         }
                         self.surface.onFirstImage = { [weak self] in self?.showVideo() }
                         self.record("配对通过 · 发射端 \(hello.appVersion ?? "未知") · 等待视频配置")
-                        self.prototypeConnection(true, message: "已配对，等待视频")
+                        self.receiverKeepAwake = hello.preventDisplaySleep ?? true
+                        self.prototypeConnection(true, message: "已配对，等待视频", peerID: hello.identity?.id)
                         return true
                     }
                     guard promoted else { accepted.stop(); return }
@@ -1021,7 +1023,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                     self.prototypeTestResult(true, profile: profile, message: "检测成功：雷雳 TCP、配对码和屏幕参数交换均已通过。")
                                     self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return
                                 }
-                                self.prototypeConnection(true, message: "已连接，正在启动桌面采集")
+                                self.prototypeConnection(true, message: "已连接，正在启动桌面采集", peerID: profile.identity?.id)
                                 guard CGPreflightScreenCaptureAccess() else {
                                     CGRequestScreenCaptureAccess()
                                     self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
@@ -1101,7 +1103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                     peer.onReady = { [weak peer] in
                         let hello = Hello(version: Wire.protocolVersion, code: code, probe: probe,
                                           identity: self.localIdentity, address: cable.ip,
-                                          receiverCode: self.localPairingCode)
+                                          receiverCode: self.localPairingCode,
+                                          preventDisplaySleep: self.remoteSleepRequested)
                         peer?.send(.hello, (try? Wire.json(hello)) ?? Data())
                         DispatchQueue.main.async {
                             guard self.sessionID == generation else { return }
@@ -1169,6 +1172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         sessionID = UUID()
         connecting = false
         transportReady = false
+        receiverKeepAwake = true
         pointerStarted = false
         if receiverCursorHidden { NSCursor.unhide(); receiverCursorHidden = false }
         pointerTimer?.invalidate(); pointerTimer = nil
