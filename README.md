@@ -1,160 +1,114 @@
 # Thunder Display
 
-A lightweight Mac-to-Mac extended display over a Thunderbolt 3 or newer cable.
-One app contains both roles. The **MacBook sender** creates and captures a virtual
-extended desktop. The **iMac receiver** decodes and displays the incoming video.
-There is no account, subscription, or Duet protocol compatibility.
+通过一根雷雳 3 或更新的数据线，将一台 Mac 的桌面扩展或镜像到另一台 Mac。
 
-## Downloads: 0.6.1
+同一个应用同时包含两种角色：主机负责创建或采集桌面并编码发送；显示器负责接收、解码和全屏显示。应用不需要账号或订阅，也不使用 Duet 的私有协议。
 
-Install **0.6.1 on both Macs**. This version uses protocol 2; protocol 1 builds
-cannot pair with it. The two Macs must run the same release for first use.
+## 下载
 
-- Apple silicon / arm64: `dist/ThunderDisplay-arm64.zip`
-- Intel / x86_64: `dist/ThunderDisplay-x86_64.zip`
+当前版本：[Thunder Display 0.6.1](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.6.1)
 
-M-series Macs use arm64. Intel Macs use x86_64. Sender and receiver use the same app;
-choose the package for the processor of the Mac where it will run.
-Quit the old app, extract the ZIP, and replace the app in `/Applications`.
-Launch that copy, not an older copy in Downloads. Confirm the version in the window.
+请在**两台 Mac 同时安装 0.6.1**。本版本使用通信协议 2，不能与协议 1 的旧版互连。
 
-## Requirements and setup
-
-- Sender: macOS 14 or later. Receiver: macOS 12.3 or later.
-- A Thunderbolt data cable, not a charging-only USB-C cable.
-- Thunderbolt Bridge enabled on both Macs.
-- Local Network permission for WiredDisplay on recent macOS versions.
-- Screen Recording permission on the sender, required only for actual streaming.
-
-For the fixed-address setup, configure Thunderbolt Bridge as follows:
-
-| Setting | MacBook sender | iMac receiver |
-| --- | --- | --- |
-| IPv4 | Manual | Manual |
-| IP address | `10.10.10.2` | `10.10.10.3` |
-| Subnet mask | `255.255.255.0` | `255.255.255.0` |
-| Router / DNS | Empty | Empty |
-
-Avoid an address range already used by another network or VPN. Automatic
-`169.254.x.x` addresses remain supported, but that path has not been validated in
-the 0.5.1 preview. A fixed IP does not itself reduce video latency.
-
-The receiver advertises one of two preferred display modes: `2240 × 1260` for a
-5K Retina iMac such as the M1 model, or `2560 × 1440` for the 2017 2.5K Intel iMac.
-For the M1 iMac, the `2240 × 1260` desktop uses a `4480 × 2520` Retina video
-stream in the **原生清晰** quality setting; this keeps text at the panel's native
-pixel density. The 4K compatibility setting is less sharp by design.
-
-## First connection
-
-1. On the iMac, click **将这台 Mac 用作显示器**. Wait for **监听中 · TCP 54321**.
-2. On the MacBook, enter the receiver address and its six-digit pairing code once.
-   Bonjour fills an empty address field if exactly one compatible receiver is found;
-   manual entry remains available if discovery is blocked.
-3. Click **测试连接** first. It checks TCP, the pairing code, and screen parameters.
-   It does not request Screen Recording, create a display, or replace a running session.
-4. After the test succeeds, select **扩展** or **镜像** and click **连接**.
-5. Allow Screen Recording when requested and reconnect. If macOS asks for a relaunch,
-   quit and reopen the app.
-6. Arrange the virtual display in the MacBook's **System Settings > Displays**.
-
-The receiver keeps one stable pairing code for that Mac. After a successful first
-pairing, both Macs save each other as devices, including the address and the
-reverse-direction pairing credential. Reconnecting an undeleted device needs one
-click. Deleting a device removes only this Mac's record; the other Mac retains its
-record until it is also deleted.
-
-The receiver stays listening after invalid clients, failed pairing, and disconnects.
-A new client replaces the active session only after valid pairing. **断开** stops
-both the session and listening. The visible app version identifies the installed
-build; protocol version determines compatibility in 0.2.2 and later.
-
-## Connection diagnostics
-
-The window reports TCP path selection, TCP readiness, pairing, and screen-profile
-receipt separately. **拷贝诊断** copies the attempt history without the pairing code.
-**本地网络设置** opens the relevant macOS privacy settings page.
-
-| Result | Meaning / next step |
+| Mac 芯片 | 下载包 |
 | --- | --- |
-| No Thunderbolt address | Check the physical cable and Thunderbolt Bridge configuration. |
-| `localNetworkDenied` | macOS denied this app local-network access; inspect its permission. |
-| TCP waiting / timeout | Inspect the recorded interface and path reason, receiver listener, and network filters. |
-| TCP ready, then EOF before profile | Transport worked; check receiver version and pairing. Older versions do not send a rejection reason. |
-| Pairing or protocol rejection | Correct the code or update the incompatible app. |
-| Test succeeds, capture fails | Investigate Screen Recording, virtual display, or hardware codec support. |
+| Apple 芯片（M1、M2、M3 等） | `ThunderDisplay-arm64.zip` |
+| Intel 芯片 | `ThunderDisplay-x86_64.zip` |
 
-An enabled app, Screen Recording permission, and a disabled firewall do not prove
-that macOS permits outgoing local-network access. Likewise, a successful terminal
-probe does not prove that the app has the same effective permissions.
+解压后将 `Thunder Display.app` 放入 `/Applications`，替换旧版并确认打开的是新版本。发送端和显示器端使用同一个应用，只需按各自 Mac 的芯片选择安装包。
 
-The preview is ad hoc signed. macOS local-network identity tracking may be less
-reliable across ad hoc rebuilds than with an Apple-issued signing identity. No
-Apple-issued signing identity is available on the build machine. Do not disable
-system-wide privacy or firewall protections as a workaround.
+## 使用条件
 
-If Gatekeeper blocks first launch, use Finder's **Open** or the app-specific
-**Open Anyway** action in Privacy & Security. The app is not notarized.
+- 主机：macOS 14 或更新版本。
+- 显示器：macOS 12.3 或更新版本。
+- 两台 Mac 之间使用雷雳数据线；仅充电 USB-C 线不可用。
+- 两台 Mac 均已在“系统设置 > 网络”启用“雷雳网桥”。
+- 主机实际推送画面时需要允许“屏幕录制”。
+- 较新的 macOS 可能要求允许 Thunder Display 使用“本地网络”。
 
-## Transport design
+## 网络设置
 
-- Native Network.framework `NWConnection` and `NWListener`.
-- Sender uses the Thunderbolt local endpoint, prohibits Wi-Fi/cellular, and verifies
-  the actual local endpoint after connection. Link-local IPv4 hosts are interface-scoped.
-- Wildcard receiver listener; accepted connections must use the current Thunderbolt
-  local address before processing the application protocol.
-- Bonjour `_wireddisplay._tcp` advertises address, interface, app and protocol version.
-- Pairing exchanges persistent device identity only after the supplied code is accepted;
-  both apps then add the other Mac to their local device list.
-- TCP_NODELAY, interactive-video service class, bounded frame budget, hardware
-  VideoToolbox encoding/decoding, and immediate native video presentation.
-- Cursor coordinates are lightweight, begin after the first decoded frame is
-  acknowledged, and use the receiver's native cursor asset so Retina scale does
-  not distort its shape.
-- ScreenCaptureKit audio relay sends 48 kHz stereo float PCM with a bounded receiver
-  queue. It favors low latency over preserving audio during temporary congestion.
-- Real metrics report encoded throughput, confirmed frame rate, frame confirmation
-  round-trip time, codec, and a rolling 60-s rate graph.
-- The cable check reports the configured Thunderbolt Bridge and macOS-reported peer
-  link state/speed. macOS does not expose a portable active/passive cable field.
-- Protocol-aware probes never become display sessions. Bad clients do not stop listening.
+建议为两端雷雳网桥设置固定 IPv4 地址。固定地址的价值是连接稳定、设备记录不失效；它本身不会降低视频延迟。
 
-This is an independent implementation. We have not established Duet's proprietary
-transport or matched its latency. TargetBridge's virtual-display declarations and
-MIT notice are retained in `LICENSE-TargetBridge.txt`.
+| 设置 | MacBook 主机 | iMac 显示器 |
+| --- | --- | --- |
+| IPv4 | 手动 | 手动 |
+| IP 地址 | `10.10.10.2` | `10.10.10.3` |
+| 子网掩码 | `255.255.255.0` | `255.255.255.0` |
+| 路由器 / DNS | 留空 | 留空 |
 
-## Validation status
+避免选用与 VPN 或其他局域网相同的网段。自动分配的 `169.254.x.x` 地址仍可使用，但尚未完成完整双机验证。
 
-0.5.1 is a preview, not a confirmed end-to-end fix:
+## 第一次连接
 
-- Both architectures compile and packaged app signatures verify.
-- Native arm64 transport check passes fragmented/coalesced frames, oversized packet
-  rejection, disconnect/reconnect, and exactly-once close notification.
-- Running app receiver checks pass wrong-code and protocol rejection, idle-client
-  timeout, malformed input, probes during an active session, authenticated replacement,
-  and listener survival after disconnect.
-- On the connected Macs, Network.framework established TCP to `10.10.10.3:54321`
-  using `bridge0` in approximately 1 ms. The old receiver then closed after Hello
-  without returning a profile. This measures connection setup, **not display latency**.
-- Both-Mac 0.5.1 streaming, Intel runtime, Bonjour discovery between two machines,
-  automatic link-local addressing, and end-to-end latency still need validation.
+1. 在准备作为显示器的 iMac 上打开应用，选择“显示器”，点击“作为显示器连接”。
+2. 页面会显示该 Mac 的雷雳网桥地址与六位配对码。
+3. 在主机 Mac 上点击“添加设备”，录入对端名称、地址和六位配对码。
+4. 先点击“检测雷雳线”。检测会验证雷雳网桥路径、TCP、配对码和接收端屏幕参数，不会启动屏幕录制或创建虚拟显示器。
+5. 检测通过后，选择“扩展”或“镜像”，点击“连接”。首次推送时按系统提示允许屏幕录制。
+6. 使用扩展模式时，在主机的“系统设置 > 显示器 > 排列”中放置虚拟显示器。
 
-See [validation notes](docs/validation-0.2.0.md).
+首次配对成功后，两端都会保存对方的设备身份、地址和反向连接凭据。只要未在侧栏“忘记此设备”，下次连接无需再次输入配对码。每台 Mac 的本机配对码稳定保存，不会因断开或重新监听而变化。
 
-## Build and checks
+## 分辨率建议
+
+| 显示器 | 推荐逻辑桌面 | 实际视频流 |
+| --- | --- | --- |
+| M1 24 英寸 iMac | `2240 × 1260` | `4480 × 2520` Retina |
+| 2017 2.5K iMac | `2560 × 1440` | `2560 × 1440` |
+
+M1 iMac 选择“原生清晰”时使用 Retina 后备分辨率，文字更锐利。兼容档会降低编码压力，但文字清晰度也会下降。
+
+## 已实现功能
+
+- 扩展桌面：主机创建并采集虚拟显示器。
+- 镜像：主机直接采集主屏幕。
+- 硬件 HEVC / H.264 编解码、TCP_NODELAY、有限帧队列和即时呈现。
+- 轻量鼠标同步。
+- 48 kHz 双声道 PCM 音频中继；接收端使用有上限的播放队列，链路短暂拥塞时优先避免拖慢视频。
+- 实时显示编码吞吐、确认帧率、画面确认往返时间、编码格式和 60 秒传输曲线。
+- 配置检查读取实际雷雳网桥、系统报告的对端连接状态与速率。
+- 空设备列表仍保留“本机状态”入口，可从配置检查或偏好设置返回主工作台。
+- 可在偏好设置中切换两套运行中 Dock 图标。
+
+macOS 没有提供通用公开接口来识别每根雷雳线是否为主动线、被动线或其营销代际。应用只报告系统实际给出的链路状态和速率，不猜测线材型号。
+
+## 连接问题
+
+| 现象 | 检查方向 |
+| --- | --- |
+| 未发现雷雳网桥 | 检查线材、端口、雷雳网桥是否启用以及两端 IPv4 设置。 |
+| `localNetworkDenied` | 在“系统设置 > 隐私与安全性 > 本地网络”允许 Thunder Display。 |
+| TCP 等待或超时 | 确认显示器端正在监听，地址在同一子网，且本地网络权限已允许。 |
+| 配对或协议被拒绝 | 使用显示器当前显示的六码；确认两端都安装 0.6.1。 |
+| 检测通过但无法开始画面 | 检查主机“屏幕录制”权限、虚拟显示器创建和硬件编码器。 |
+| 字体模糊或比例异常 | 选择与 iMac 对应的分辨率，并在主机“显示器 > 排列”中确认虚拟显示器模式。 |
+
+“应用能打开”或“防火墙已允许”不等于 macOS 已允许本地网络连接。应用内诊断记录会分别显示路径选择、TCP 建立、配对和屏幕参数交换状态。
+
+## 已验证与待验证
+
+已验证：
+
+- arm64 与 x86_64 均可构建和打包，安装包签名及 `Info.plist` 校验通过。
+- 传输测试覆盖分段/合并帧、超大包拒绝、断开重连、身份与配对凭据编解码。
+- 原型页面的脚本解析、空设备状态导航和版本资源已校验。
+
+尚需在真实两台 Mac 的雷雳网桥上验证扩展、镜像、音频、Intel 运行时表现和端到端延迟。软件不会把这些硬件相关结果伪装为已验证。
+
+## 构建
 
 ```sh
 ./build.sh
+
 xcrun swiftc -swift-version 5 Sources/Cable.swift Sources/Wire.swift \
-  Tests/TransportCheck.swift -o /private/tmp/wireddisplay-transport-check \
+  Tests/TransportCheck.swift -o /private/tmp/thunder-transport-check \
   -framework Network -framework SystemConfiguration
-/private/tmp/wireddisplay-transport-check
-# Start a local app receiver first; replace the address and current pairing code:
-python3 Tests/ReceiverCheck.py 10.10.10.2 CURRENT_PAIRING_CODE
+/private/tmp/thunder-transport-check
 ```
 
-Packages and SHA-256 checksums are written to `dist/`. Signing happens in a temporary
-directory outside Desktop/iCloud so File Provider metadata cannot break signing.
-Set `WIRED_SIGN_IDENTITY` to an installed Apple-issued code-signing identity for a
-signed development build; default is ad hoc. The bundle/signing identifier is the
-same for both CPU architectures.
+构建产物和 SHA-256 校验文件位于 `dist/`。默认使用临时目录进行 ad-hoc 签名；如需使用 Apple 签名证书，可设置 `WIRED_SIGN_IDENTITY`。
+
+## 说明
+
+Thunder Display 是独立实现。我们没有确认 Duet 的私有传输细节，也没有声明已达到 Duet 的延迟水平。TargetBridge 的 MIT 许可说明保留在 [LICENSE-TargetBridge.txt](LICENSE-TargetBridge.txt)。
