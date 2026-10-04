@@ -11,6 +11,8 @@ private final class ReceiveSession {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    private enum Page: CaseIterable { case connection, diagnostics, settings }
+
     private var window: NSWindow!
     private var videoWindow: NSWindow?
     private let surface = VideoSurface(frame: .zero)
@@ -21,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let versionLabel = NSTextField(labelWithString: "")
     private let addressField = NSTextField()
     private let codeField = NSTextField()
-    private let quality = NSPopUpButton()
+    private let quality = NSSegmentedControl(labels: ["原生 Retina", "4K 流畅"], trackingMode: .selectOne, target: nil, action: nil)
     private var sendButton: NSButton!
     private var testButton: NSButton!
     private let discovery = CableDiscovery()
@@ -46,6 +48,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var stopping = false
     private var quitting = false
     private var lastSendPacket = DispatchTime.now().uptimeNanoseconds
+    private var pages: [Page: NSView] = [:]
+    private var navigation: [Page: NSButton] = [:]
+    private var senderControls: NSView!
+    private var receiverControls: NSView!
+    private var roleControl: NSSegmentedControl!
+    private var mainActionButton: NSButton!
+    private var displaySleepButton: NSButton!
+    private var selectedDeviceButton: NSButton!
+    private var contentStack: NSStackView!
+    private var toolbarTitle: NSTextField!
+    private var sleepActivity: NSObjectProtocol?
+    private let roleLabel = NSTextField(labelWithString: "本机作为主机")
+    private let connectionStateLabel = NSTextField(labelWithString: "未连接")
+    private let diagnosticCableLabel = NSTextField(labelWithString: "正在检查雷雳网桥…")
+    private let diagnosticStatusLabel = NSTextField(wrappingLabelWithString: "等待连接诊断")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
@@ -83,79 +100,229 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func buildWindow() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 580),
-            styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "WiredDisplay"
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Thunder Display"
         window.delegate = self
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 760, height: 560)
         window.center()
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 16
-        stack.edgeInsets = NSEdgeInsets(top: 26, left: 28, bottom: 26, right: 28)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView!.addSubview(stack)
+
+        let root = NSStackView()
+        root.orientation = .horizontal
+        root.spacing = 0
+        root.translatesAutoresizingMaskIntoConstraints = false
+        window.contentView!.addSubview(root)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: window.contentView!.bottomAnchor)
+            root.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor),
+            root.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
+            root.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor)
         ])
-        let heading = NSTextField(labelWithString: "两台 Mac，一根雷雳线。")
-        heading.font = .systemFont(ofSize: 23, weight: .semibold)
-        stack.addArrangedSubview(heading)
-        cableLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
-        cableLabel.textColor = .secondaryLabelColor
-        stack.addArrangedSubview(cableLabel)
-        let separator = NSBox(); separator.boxType = .separator
-        stack.addArrangedSubview(separator)
-        separator.widthAnchor.constraint(equalToConstant: 404).isActive = true
-        receiveButton = NSButton(title: "将这台 Mac 用作显示器", target: self, action: #selector(receive))
-        receiveButton.bezelStyle = .rounded
-        stack.addArrangedSubview(receiveButton)
-        pairingLabel.font = .monospacedSystemFont(ofSize: 14, weight: .medium)
-        pairingLabel.isSelectable = true
-        stack.addArrangedSubview(pairingLabel)
-        addressField.placeholderString = "接收端雷雳地址"
-        addressField.stringValue = UserDefaults.standard.string(forKey: "receiverAddress") ?? ""
-        addressField.setAccessibilityLabel("接收端雷雳地址")
-        codeField.placeholderString = "6 位配对码"
-        codeField.setAccessibilityLabel("接收端配对码")
-        let fields = NSStackView(views: [addressField, codeField])
-        fields.spacing = 10
-        addressField.widthAnchor.constraint(equalToConstant: 260).isActive = true
-        codeField.widthAnchor.constraint(equalToConstant: 130).isActive = true
-        stack.addArrangedSubview(fields)
-        quality.addItems(withTitles: ["原生清晰 · 60 帧", "4K 流畅 · 60 帧"])
-        quality.selectItem(at: UserDefaults.standard.integer(forKey: "quality"))
-        quality.setAccessibilityLabel("画质")
-        sendButton = NSButton(title: "扩展到这台 Mac", target: self, action: #selector(sendDisplay))
-        sendButton.bezelStyle = .rounded
-        let actions = NSStackView(views: [quality, sendButton])
-        actions.spacing = 12
-        stack.addArrangedSubview(actions)
-        testButton = NSButton(title: "测试连接", target: self, action: #selector(testConnection))
-        let networkSettings = NSButton(title: "本地网络设置", target: self, action: #selector(openNetworkSettings))
-        let copy = NSButton(title: "拷贝诊断", target: self, action: #selector(copyDiagnostics))
-        stack.addArrangedSubview(NSStackView(views: [testButton, networkSettings, copy]))
-        statusLabel.isSelectable = true
-        statusLabel.font = .systemFont(ofSize: 13)
-        statusLabel.widthAnchor.constraint(equalToConstant: 404).isActive = true
-        stack.addArrangedSubview(statusLabel)
-        metricsLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        metricsLabel.textColor = .secondaryLabelColor
-        metricsLabel.toolTip = "从送入编码器到接收端提交画面、确认返回的耗时。不是屏幕实际亮起的延迟。静止桌面会自动减少帧数。"
-        stack.addArrangedSubview(metricsLabel)
+
+        let sidebar = NSStackView()
+        sidebar.orientation = .vertical
+        sidebar.alignment = .leading
+        sidebar.spacing = 5
+        sidebar.edgeInsets = NSEdgeInsets(top: 24, left: 14, bottom: 14, right: 14)
+        sidebar.translatesAutoresizingMaskIntoConstraints = false
+        sidebar.widthAnchor.constraint(equalToConstant: 205).isActive = true
+        sidebar.wantsLayer = true
+        sidebar.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78).cgColor
+        root.addArrangedSubview(sidebar)
+
+        let brand = NSTextField(labelWithString: "◈  Thunder Display")
+        brand.font = .systemFont(ofSize: 15, weight: .semibold)
+        sidebar.addArrangedSubview(brand)
+        sidebar.addArrangedSubview(sectionLabel("设备"))
+        selectedDeviceButton = NSButton(title: "▣  远端 Mac\n     型号未发现 · 系统版本未发现", target: self, action: #selector(showConnectionPage))
+        selectedDeviceButton.alignment = .left
+        selectedDeviceButton.lineBreakMode = .byWordWrapping
+        selectedDeviceButton.bezelStyle = .texturedRounded
+        selectedDeviceButton.setAccessibilityLabel("当前设备")
+        sidebar.addArrangedSubview(selectedDeviceButton)
+        sidebar.addArrangedSubview(sectionLabel("工具"))
+        let diagnosticsButton = navigationButton("◌  配置检查", page: .diagnostics)
+        let settingsButton = navigationButton("⚙  偏好设置", page: .settings)
+        sidebar.addArrangedSubview(diagnosticsButton)
+        sidebar.addArrangedSubview(settingsButton)
+        let spacer = NSView(); sidebar.addArrangedSubview(spacer)
+        spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
         versionLabel.stringValue = "WiredDisplay \(Wire.appVersion) · Protocol \(Wire.protocolVersion)"
         versionLabel.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
         versionLabel.textColor = .tertiaryLabelColor
-        stack.addArrangedSubview(versionLabel)
-        stopButton = NSButton(title: "断开", target: self, action: #selector(disconnect))
-        stopButton.bezelStyle = .rounded
-        stopButton.isEnabled = false
-        stack.addArrangedSubview(stopButton)
+        versionLabel.lineBreakMode = .byTruncatingTail
+        sidebar.addArrangedSubview(versionLabel)
+
+        let main = NSStackView()
+        main.orientation = .vertical
+        main.alignment = .leading
+        main.spacing = 0
+        main.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        main.translatesAutoresizingMaskIntoConstraints = false
+        root.addArrangedSubview(main)
+
+        let toolbar = NSStackView()
+        toolbar.orientation = .horizontal
+        toolbar.alignment = .centerY
+        toolbar.spacing = 8
+        toolbar.edgeInsets = NSEdgeInsets(top: 12, left: 24, bottom: 12, right: 24)
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        toolbarTitle = NSTextField(labelWithString: "主机 · 远端 Mac")
+        toolbarTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        toolbar.addArrangedSubview(toolbarTitle)
+        let toolbarSpacer = NSView(); toolbar.addArrangedSubview(toolbarSpacer)
+        toolbarSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let refresh = NSButton(title: "↻", target: self, action: #selector(refreshCable))
+        refresh.toolTip = "刷新雷雳网桥"
+        refresh.bezelStyle = .texturedRounded
+        toolbar.addArrangedSubview(refresh)
+        testButton = NSButton(title: "检测雷雳线", target: self, action: #selector(testConnection))
+        testButton.bezelStyle = .texturedRounded
+        toolbar.addArrangedSubview(testButton)
+        mainActionButton = NSButton(title: "扩展到远端 Mac", target: self, action: #selector(sendDisplay))
+        mainActionButton.bezelStyle = .rounded
+        mainActionButton.keyEquivalent = "\r"
+        toolbar.addArrangedSubview(mainActionButton)
+        main.addArrangedSubview(toolbar)
+        let divider = NSBox(); divider.boxType = .separator; main.addArrangedSubview(divider)
+
+        contentStack = NSStackView()
+        contentStack.orientation = .vertical
+        contentStack.alignment = .leading
+        contentStack.spacing = 0
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
+        main.addArrangedSubview(contentStack)
+        contentStack.widthAnchor.constraint(equalTo: main.widthAnchor).isActive = true
+        contentStack.heightAnchor.constraint(equalTo: main.heightAnchor, constant: -52).isActive = true
+        pages[.connection] = buildConnectionPage()
+        pages[.diagnostics] = buildDiagnosticsPage()
+        pages[.settings] = buildSettingsPage()
+        for page in Page.allCases {
+            if let view = pages[page] { contentStack.addArrangedSubview(view); view.isHidden = page != .connection }
+        }
+        showPage(.connection)
+        updateRoleUI()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func sectionLabel(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title.uppercased())
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = .secondaryLabelColor
+        return label
+    }
+
+    private func navigationButton(_ title: String, page: Page) -> NSButton {
+        let button = NSButton(title: title, target: self, action: #selector(navigate(_:)))
+        button.bezelStyle = .texturedRounded
+        button.alignment = .left
+        button.tag = page == .diagnostics ? 1 : 2
+        navigation[page] = button
+        return button
+    }
+
+    private func card(_ content: NSView) -> NSView {
+        let box = NSView()
+        box.wantsLayer = true
+        box.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        box.layer?.cornerRadius = 10
+        box.layer?.borderWidth = 1
+        box.layer?.borderColor = NSColor.separatorColor.cgColor
+        content.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 18),
+            content.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -18),
+            content.topAnchor.constraint(equalTo: box.topAnchor, constant: 16),
+            content.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -16)
+        ])
+        return box
+    }
+
+    private func buildConnectionPage() -> NSView {
+        let page = NSStackView()
+        page.orientation = .vertical; page.alignment = .leading; page.spacing = 16
+        page.edgeInsets = NSEdgeInsets(top: 28, left: 30, bottom: 30, right: 30)
+        let hero = NSStackView(); hero.orientation = .vertical; hero.alignment = .leading; hero.spacing = 12
+        let title = NSTextField(labelWithString: "远端 Mac")
+        title.font = .systemFont(ofSize: 22, weight: .bold); hero.addArrangedSubview(title)
+        cableLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular); cableLabel.textColor = .secondaryLabelColor; hero.addArrangedSubview(cableLabel)
+        connectionStateLabel.font = .systemFont(ofSize: 12, weight: .semibold); connectionStateLabel.textColor = .systemGreen; hero.addArrangedSubview(connectionStateLabel)
+        let identity = NSStackView(); identity.orientation = .horizontal; identity.distribution = .fillEqually; identity.spacing = 18
+        identity.addArrangedSubview(identityFact("设备名称", "远端 Mac")); identity.addArrangedSubview(identityFact("设备型号", "型号未发现")); identity.addArrangedSubview(identityFact("系统版本", "系统版本未发现")); hero.addArrangedSubview(identity)
+        roleControl = NSSegmentedControl(labels: ["主机", "显示器"], trackingMode: .selectOne, target: self, action: #selector(roleChanged(_:)))
+        roleControl.selectedSegment = UserDefaults.standard.bool(forKey: "displayRole") ? 1 : 0
+        roleControl.setAccessibilityLabel("本机角色")
+        let roleRow = NSStackView(views: [roleLabel, roleControl]); roleRow.spacing = 18; roleRow.alignment = .centerY; hero.addArrangedSubview(roleRow)
+
+        senderControls = buildSenderControls()
+        receiverControls = buildReceiverControls()
+        hero.addArrangedSubview(senderControls); hero.addArrangedSubview(receiverControls)
+        statusLabel.isSelectable = true; statusLabel.font = .systemFont(ofSize: 12); statusLabel.textColor = .secondaryLabelColor; statusLabel.maximumNumberOfLines = 3; hero.addArrangedSubview(statusLabel)
+        metricsLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular); metricsLabel.textColor = .secondaryLabelColor; hero.addArrangedSubview(metricsLabel)
+        stopButton = NSButton(title: "断开", target: self, action: #selector(disconnect)); stopButton.bezelStyle = .texturedRounded; stopButton.isEnabled = false; hero.addArrangedSubview(stopButton)
+        let box = card(hero); box.translatesAutoresizingMaskIntoConstraints = false; page.addArrangedSubview(box); box.widthAnchor.constraint(equalTo: page.widthAnchor, constant: -60).isActive = true
+        let setup = NSTextField(labelWithString: "配置引导\n1. 两台 Mac 的系统设置 → 网络 → 雷雳网桥应显示地址。\n2. 显示器端先点击“作为显示器”，主机端再输入地址与配对码。\n3. 首次扩展需要在发送端允许屏幕录制。")
+        setup.font = .systemFont(ofSize: 12); setup.textColor = .secondaryLabelColor; setup.maximumNumberOfLines = 5
+        let setupBox = card(setup); setupBox.translatesAutoresizingMaskIntoConstraints = false; page.addArrangedSubview(setupBox); setupBox.widthAnchor.constraint(equalTo: page.widthAnchor, constant: -60).isActive = true
+        return page
+    }
+
+    private func identityFact(_ name: String, _ value: String) -> NSView {
+        let stack = NSStackView(); stack.orientation = .vertical; stack.spacing = 4
+        let label = NSTextField(labelWithString: name); label.font = .systemFont(ofSize: 10, weight: .semibold); label.textColor = .secondaryLabelColor
+        let valueLabel = NSTextField(labelWithString: value); valueLabel.font = .systemFont(ofSize: 12, weight: .medium); valueLabel.lineBreakMode = .byTruncatingTail
+        stack.addArrangedSubview(label); stack.addArrangedSubview(valueLabel); return stack
+    }
+
+    private func buildSenderControls() -> NSView {
+        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
+        let label = NSTextField(labelWithString: "主机输出"); label.font = .systemFont(ofSize: 12, weight: .semibold); stack.addArrangedSubview(label)
+        let fields = NSStackView(views: [addressField, codeField]); fields.spacing = 8
+        addressField.placeholderString = "接收端雷雳地址"; addressField.stringValue = UserDefaults.standard.string(forKey: "receiverAddress") ?? ""; addressField.setAccessibilityLabel("接收端雷雳地址")
+        codeField.placeholderString = "6 位配对码"; codeField.setAccessibilityLabel("接收端配对码")
+        addressField.widthAnchor.constraint(equalToConstant: 250).isActive = true; codeField.widthAnchor.constraint(equalToConstant: 125).isActive = true; stack.addArrangedSubview(fields)
+        quality.selectedSegment = UserDefaults.standard.integer(forKey: "quality"); quality.setAccessibilityLabel("画质"); quality.segmentStyle = .rounded; stack.addArrangedSubview(quality)
+        sendButton = NSButton(title: "扩展到远端 Mac", target: self, action: #selector(sendDisplay)); sendButton.bezelStyle = .rounded; stack.addArrangedSubview(sendButton)
+        return stack
+    }
+
+    private func buildReceiverControls() -> NSView {
+        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 9
+        let label = NSTextField(labelWithString: "显示器接收"); label.font = .systemFont(ofSize: 12, weight: .semibold); stack.addArrangedSubview(label)
+        pairingLabel.font = .monospacedSystemFont(ofSize: 13, weight: .medium); pairingLabel.isSelectable = true; stack.addArrangedSubview(pairingLabel)
+        displaySleepButton = NSButton(checkboxWithTitle: "防止显示器息屏", target: self, action: #selector(togglePreventSleep(_:)))
+        displaySleepButton.state = UserDefaults.standard.bool(forKey: "preventDisplaySleep") ? .on : .off; stack.addArrangedSubview(displaySleepButton)
+        receiveButton = NSButton(title: "作为显示器等待连接", target: self, action: #selector(receive)); receiveButton.bezelStyle = .rounded; stack.addArrangedSubview(receiveButton)
+        return stack
+    }
+
+    private func buildDiagnosticsPage() -> NSView {
+        let page = NSStackView(); page.orientation = .vertical; page.alignment = .leading; page.spacing = 16; page.edgeInsets = NSEdgeInsets(top: 28, left: 30, bottom: 30, right: 30)
+        let title = NSTextField(labelWithString: "配置检查"); title.font = .systemFont(ofSize: 26, weight: .bold); page.addArrangedSubview(title)
+        let subtitle = NSTextField(labelWithString: "验证雷雳网桥路径、协议握手和当前图传状态。"); subtitle.textColor = .secondaryLabelColor; page.addArrangedSubview(subtitle)
+        diagnosticCableLabel.font = .systemFont(ofSize: 13, weight: .medium); diagnosticStatusLabel.font = .systemFont(ofSize: 13); diagnosticStatusLabel.textColor = .secondaryLabelColor
+        let info = NSStackView(views: [diagnosticCableLabel, diagnosticStatusLabel]); info.orientation = .vertical; info.alignment = .leading; info.spacing = 9
+        let box = card(info); box.translatesAutoresizingMaskIntoConstraints = false; page.addArrangedSubview(box); box.widthAnchor.constraint(equalTo: page.widthAnchor, constant: -60).isActive = true
+        let actions = NSStackView(); actions.orientation = .horizontal; actions.spacing = 8
+        let network = NSButton(title: "打开网络设置", target: self, action: #selector(openNetworkSettings)); network.bezelStyle = .texturedRounded
+        let copy = NSButton(title: "拷贝诊断", target: self, action: #selector(copyDiagnostics)); copy.bezelStyle = .texturedRounded
+        actions.addArrangedSubview(network); actions.addArrangedSubview(copy); page.addArrangedSubview(actions)
+        return page
+    }
+
+    private func buildSettingsPage() -> NSView {
+        let page = NSStackView(); page.orientation = .vertical; page.alignment = .leading; page.spacing = 16; page.edgeInsets = NSEdgeInsets(top: 28, left: 30, bottom: 30, right: 30)
+        let title = NSTextField(labelWithString: "偏好设置"); title.font = .systemFont(ofSize: 26, weight: .bold); page.addArrangedSubview(title)
+        let subtitle = NSTextField(labelWithString: "连接选项保留在设备页；这里仅放全局行为。"); subtitle.textColor = .secondaryLabelColor; page.addArrangedSubview(subtitle)
+        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 11
+        for (title, key, value) in [("唤醒后自动重连", "autoReconnect", true), ("显示菜单栏状态", "menuBarStatus", true), ("连接前检查配置", "preflight", true)] {
+            let button = NSButton(checkboxWithTitle: title, target: self, action: #selector(toggleSetting(_:))); button.identifier = NSUserInterfaceItemIdentifier(key); button.state = UserDefaults.standard.object(forKey: key) == nil ? (value ? .on : .off) : (UserDefaults.standard.bool(forKey: key) ? .on : .off); stack.addArrangedSubview(button)
+        }
+        let box = card(stack); box.translatesAutoresizingMaskIntoConstraints = false; page.addArrangedSubview(box); box.widthAnchor.constraint(equalTo: page.widthAnchor, constant: -60).isActive = true
+        let reset = NSButton(title: "恢复默认设置", target: self, action: #selector(resetSettings)); reset.bezelStyle = .texturedRounded; page.addArrangedSubview(reset)
+        return page
     }
 
     private func setBusy(_ busy: Bool) {
@@ -166,6 +333,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         codeField.isEnabled = !busy
         quality.isEnabled = !busy
         stopButton.isEnabled = busy && !stopping
+        roleControl.isEnabled = !busy
+        mainActionButton.isEnabled = !busy
+        updateRoleUI()
+    }
+
+    private func showPage(_ page: Page) {
+        for item in Page.allCases { pages[item]?.isHidden = item != page }
+        for item in Page.allCases { navigation[item]?.state = item == page ? .on : .off }
+        toolbarTitle.stringValue = page == .connection ? (roleControl.selectedSegment == 0 ? "主机 · 远端 Mac" : "显示器 · 远端 Mac") : (page == .diagnostics ? "配置检查" : "偏好设置")
+    }
+
+    private func updateRoleUI() {
+        guard roleControl != nil else { return }
+        let host = roleControl.selectedSegment == 0
+        roleLabel.stringValue = host ? "本机作为主机" : "本机作为显示器"
+        senderControls?.isHidden = !host
+        receiverControls?.isHidden = host
+        mainActionButton?.title = host ? "扩展到远端 Mac" : "等待主机连接"
+        mainActionButton?.action = host ? #selector(sendDisplay) : #selector(receive)
+        toolbarTitle?.stringValue = host ? "主机 · 远端 Mac" : "显示器 · 远端 Mac"
+    }
+
+    @objc private func navigate(_ sender: NSButton) { showPage(sender.tag == 1 ? .diagnostics : .settings) }
+    @objc private func showConnectionPage() { showPage(.connection) }
+    @objc private func refreshCable() {
+        tick()
+        diagnosticCableLabel.stringValue = CableAddress.current().map { "雷雳网桥  \($0.ip) · \($0.name) · 已就绪" } ?? "雷雳网桥未就绪"
+        record("已刷新设备发现与本地雷雳接口")
+    }
+    @objc private func roleChanged(_ sender: NSSegmentedControl) {
+        let active = peer != nil || listener != nil || connecting
+        let requestedDisplay = sender.selectedSegment == 1
+        if active {
+            let alert = NSAlert()
+            alert.messageText = "切换本机角色？"
+            alert.informativeText = "切换角色会停止当前显示会话。确认后才会应用新角色。"
+            alert.addButton(withTitle: "切换角色")
+            alert.addButton(withTitle: "取消")
+            if alert.runModal() != .alertFirstButtonReturn {
+                sender.selectedSegment = requestedDisplay ? 0 : 1
+                return
+            }
+            endSession("正在切换本机角色…")
+        }
+        UserDefaults.standard.set(requestedDisplay, forKey: "displayRole")
+        updateRoleUI()
+    }
+    @objc private func togglePreventSleep(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "preventDisplaySleep")
+        updateSleepActivity()
+    }
+    @objc private func toggleSetting(_ sender: NSButton) {
+        guard let key = sender.identifier?.rawValue else { return }
+        UserDefaults.standard.set(sender.state == .on, forKey: key)
+    }
+    @objc private func resetSettings() {
+        for key in ["autoReconnect", "menuBarStatus", "preflight"] { UserDefaults.standard.set(true, forKey: key) }
+        showPage(.settings)
+        record("偏好设置已恢复默认")
+    }
+    private func updateSleepActivity() {
+        let enabled = UserDefaults.standard.bool(forKey: "preventDisplaySleep")
+        if enabled && videoWindow != nil && sleepActivity == nil {
+            sleepActivity = ProcessInfo.processInfo.beginActivity(options: [.idleDisplaySleepDisabled, .automaticTerminationDisabled], reason: "WiredDisplay display session")
+        } else if (!enabled || videoWindow == nil), let activity = sleepActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            sleepActivity = nil
+        }
     }
     private func fail(_ message: String) {
         DispatchQueue.main.async { [weak self] in self?.endSession(message) }
@@ -347,6 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         video.toggleFullScreen(nil)
         NSCursor.hide()
         receiverCursorHidden = true
+        updateSleepActivity()
         statusLabel.stringValue = "已连接 · 仅雷雳有线"
     }
 
@@ -360,10 +597,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let code = codeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { statusLabel.stringValue = "请输入接收端显示的 6 位配对码。"; return }
         UserDefaults.standard.set(ip, forKey: "receiverAddress")
-        UserDefaults.standard.set(quality.indexOfSelectedItem, forKey: "quality")
+        UserDefaults.standard.set(quality.selectedSegment, forKey: "quality")
         sessionID = UUID()
         let generation = sessionID
-        let limited = quality.indexOfSelectedItem == 1
+        let limited = quality.selectedSegment == 1
         connecting = true
         setBusy(true)
         diagnosticLines.removeAll()
@@ -510,6 +747,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func tick() {
         let cable = CableAddress.current()
         cableLabel.stringValue = cable.map { "雷雳网桥  \($0.ip) · \($0.name)" } ?? "雷雳网桥  未就绪"
+        diagnosticCableLabel.stringValue = CableAddress.current().map { "雷雳网桥  \($0.ip) · \($0.name) · 已就绪" } ?? "雷雳网桥未就绪"
         let now = DispatchTime.now().uptimeNanoseconds
         if let peer {
             receiveLock.lock(); let receiver = receiveSession; let last = receiver?.lastSeen; receiveLock.unlock()
@@ -541,6 +779,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         peer?.stop(); peer = nil
         receiveLock.lock(); receiveSession = nil; receiveLock.unlock()
         videoWindow?.orderOut(nil); videoWindow = nil
+        updateSleepActivity()
         surface.reset()
         surface.onSubmit = nil; surface.onFirstImage = nil
         pairingLabel.stringValue = ""
@@ -560,6 +799,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         diagnosticLines.append("\(ISO8601DateFormatter().string(from: Date())) \(message)")
         if diagnosticLines.count > 100 { diagnosticLines.removeFirst() }
         statusLabel.stringValue = message
+        connectionStateLabel.stringValue = message
+        diagnosticStatusLabel.stringValue = message
         NSLog("%@", message)
     }
     @objc private func copyDiagnostics() {
