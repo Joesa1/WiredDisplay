@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thunder Display MVP UI Prototype</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f5f5f7;
+      --sidebar: rgba(246, 246, 248, .88);
+      --surface: rgba(255, 255, 255, .76);
+      --surface-solid: #fff;
+      --ink: #1d1d1f;
+      --secondary: #6e6e73;
+      --tertiary: #86868b;
+      --separator: rgba(60, 60, 67, .18);
+      --blue: #007aff;
+      --green: #34c759;
+      --orange: #ff9f0a;
+      --red: #ff3b30;
+      --shadow: 0 18px 45px rgba(28, 28, 30, .12), 0 2px 10px rgba(28, 28, 30, .07);
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      min-width: 760px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background: radial-gradient(circle at 80% -12%, #dbeaff 0, transparent 33%), var(--canvas);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    button, input { font: inherit; }
+    button { border: 0; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    button:focus-visible, input:focus-visible { outline: 3px solid rgba(0, 122, 255, .34); outline-offset: 2px; }
+    .app-window {
+      display: grid;
+      grid-template-columns: 230px minmax(530px, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      padding: 52px 12px 14px;
+      background: var(--sidebar);
+      border-right: 1px solid var(--separator);
+      backdrop-filter: blur(24px) saturate(150%);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 10px 25px;
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .brand-mark {
+      display: grid;
+      width: 23px;
+      height: 23px;
+      place-items: center;
+      color: white;
+      background: linear-gradient(145deg, #1687ff, #0066d6);
+      border-radius: 7px;
+      box-shadow: 0 2px 4px rgba(0, 91, 190, .25);
+    }
+    .brand-mark svg { width: 15px; height: 15px; }
+    .sidebar-label {
+      padding: 11px 10px 5px;
+      color: var(--secondary);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .nav-item, .device-side-item {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 9px;
+      min-height: 30px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      color: var(--ink);
+      text-align: left;
+      background: transparent;
+    }
+    .nav-item svg, .device-side-item svg { width: 16px; height: 16px; color: var(--secondary); stroke-width: 2; }
+    .nav-item.active, .device-side-item.active { background: rgba(0, 122, 255, .14); color: #005fc8; }
+    .nav-item.active svg, .device-side-item.active svg { color: var(--blue); }
+    .device-side-item { gap: 8px; }
+    .device-side-item .device-label { display: block; min-width: 0; flex: 1; }
+    .device-side-item .device-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .device-side-item small { display: block; overflow: hidden; margin-top: 2px; color: var(--secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .sidebar-status { width: 7px; height: 7px; border-radius: 50%; background: var(--secondary); }
+    .sidebar-status.online { background: var(--green); box-shadow: 0 0 0 2px rgba(52,199,89,.13); }
+    .sidebar-status.away { background: var(--orange); }
+    .sidebar-bottom { display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
+    .version-status { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; width: 100%; padding: 9px 10px; color: var(--ink); background: rgba(118,118,128,.08); border-radius: 7px; text-align: left; }
+    .version-status:hover { background: rgba(118,118,128,.14); }
+    .version-status span { display: block; grid-column: 1; }
+    .version-status strong { font-size: 11px; font-weight: 600; }
+    .version-status small { color: var(--secondary); font-size: 10px; }
+    .version-status .version-state { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #16823c; font-size: 10px; font-weight: 600; }
+    .version-status.incompatible .version-state { color: #bd6e00; }
+    .version-status.unknown .version-state { color: var(--secondary); }
+
+    main { min-width: 0; }
+    .toolbar {
+      display: flex;
+      position: sticky;
+      z-index: 3;
+      top: 0;
+      align-items: center;
+      height: 52px;
+      padding: 0 28px;
+      background: rgba(245, 245, 247, .72);
+      border-bottom: 1px solid rgba(60,60,67,.08);
+      backdrop-filter: blur(18px) saturate(160%);
+    }
+    .toolbar h1 { margin: 0; font-size: 13px; font-weight: 600; }
+    .toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
+    .icon-button, .button-secondary, .button-primary {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 6px;
+      transition: background .14s ease, transform .14s ease;
+    }
+    .icon-button { width: 29px; padding: 0; background: rgba(118,118,128,.12); color: var(--ink); }
+    .button-secondary { padding: 0 10px; background: rgba(118,118,128,.12); color: var(--ink); }
+    .button-primary { padding: 0 11px; color: white; background: var(--blue); box-shadow: 0 1px 2px rgba(0, 75, 165, .2); }
+    .button-primary:hover { background: #0071e8; }
+    .button-secondary:hover, .icon-button:hover { background: rgba(118,118,128,.19); }
+    .button-primary:active, .button-secondary:active, .icon-button:active { transform: scale(.97); }
+    .icon-button svg, .button-secondary svg, .button-primary svg { width: 15px; height: 15px; }
+
+    .page { display: none; max-width: 1160px; padding: 39px 38px 60px; }
+    .page.active { display: block; animation: appear .18s ease-out; }
+    @keyframes appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .page-head { display: flex; align-items: end; justify-content: space-between; margin-bottom: 26px; }
+    .page-head h2 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: .01em; }
+    .page-head p { margin: 5px 0 0; color: var(--secondary); font-size: 14px; }
+    .heading-action { align-self: center; }
+    .section { margin-top: 31px; }
+    .section:first-of-type { margin-top: 0; }
+    .section h3 { margin: 0 0 9px; color: var(--secondary); font-size: 12px; font-weight: 600; }
+
+    .session-hero {
+      position: relative;
+      overflow: hidden;
+      padding: 21px 22px 0;
+      background: linear-gradient(130deg, rgba(255,255,255,.92), rgba(246,250,255,.8));
+      border: 1px solid rgba(255,255,255,.9);
+      border-radius: 11px;
+      box-shadow: 0 1px 1px rgba(0,0,0,.03), 0 11px 27px rgba(27, 74, 126, .08);
+    }
+    .session-top { display: flex; align-items: flex-start; gap: 13px; }
+    .session-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .role-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; margin-top: 18px; border-top: 1px solid var(--separator); }
+    .role-copy small { display: block; margin-bottom: 3px; color: var(--secondary); font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+    .role-copy strong { font-size: 13px; font-weight: 600; }
+    .segmented-control { display: inline-flex; padding: 2px; background: rgba(118,118,128,.12); border-radius: 7px; }
+    .segment { min-width: 70px; min-height: 25px; padding: 0 9px; color: var(--secondary); background: transparent; border-radius: 5px; font-size: 11px; font-weight: 550; transition: color .14s ease, background .14s ease, box-shadow .14s ease; }
+    .segment.active { color: var(--ink); background: var(--surface-solid); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+    .host-config, .receiver-config { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 13px 14px; margin: 0 -4px; background: rgba(0,122,255,.055); border: 1px solid rgba(0,122,255,.14); border-radius: 8px; }
+    .receiver-config { background: rgba(118,118,128,.065); border-color: rgba(60,60,67,.13); }
+    .route-copy { display: flex; min-width: 0; align-items: center; gap: 9px; }
+    .route-copy > i { flex: 0 0 auto; width: 17px; height: 17px; color: var(--blue); }
+    .receiver-config .route-copy > i { color: var(--secondary); }
+    .route-copy span { display: block; color: var(--secondary); font-size: 10px; }
+    .route-copy strong { display: block; overflow: hidden; margin-top: 2px; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .host-options { display: flex; align-items: center; gap: 10px; }
+    .mode-control .segment { min-width: 54px; }
+    .audio-control { display: flex; align-items: center; gap: 7px; color: var(--secondary); font-size: 11px; white-space: nowrap; }
+    .audio-control .switch { margin-left: 0; }
+    .device-avatar {
+      display: grid;
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      color: #1464b7;
+      background: #e2f0ff;
+      border-radius: 10px;
+    }
+    .device-avatar.orange { color: #b46c00; background: #fff0d7; }
+    .device-avatar svg { width: 23px; height: 23px; }
+    .session-copy { min-width: 0; }
+    .session-copy h3 { margin: 1px 0 4px; color: var(--ink); font-size: 17px; font-weight: 650; }
+    .session-copy p { margin: 0; color: var(--secondary); font-size: 13px; }
+    .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 17px; padding-top: 15px; border-top: 1px solid var(--separator); }
+    .identity-fact { min-width: 0; padding-right: 14px; }
+    .identity-fact + .identity-fact { padding-left: 14px; border-left: 1px solid var(--separator); }
+    .identity-fact span { display: block; margin-bottom: 4px; color: var(--secondary); font-size: 10px; font-weight: 600; }
+    .identity-fact strong { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .connection-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      color: #16823c;
+      background: rgba(52,199,89,.11);
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .connection-pill i { width: 6px; height: 6px; background: var(--green); border-radius: 50%; }
+    .version-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; color: #16823c; background: rgba(52,199,89,.11); border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .version-chip svg { width: 13px; height: 13px; }
+    .version-chip.incompatible { color: #b66b00; background: rgba(255,159,10,.15); }
+    .version-chip.unknown { color: var(--secondary); background: rgba(118,118,128,.12); }
+    .version-warning { display: none; align-items: center; gap: 9px; padding: 10px 0 0; margin-top: 14px; color: #9b5700; border-top: 1px solid var(--separator); font-size: 12px; }
+    .version-warning.show { display: flex; }
+    .version-warning svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .version-warning button { margin-left: auto; }
+    .device-menu { display: none; position: absolute; z-index: 2; top: 58px; right: 16px; width: 160px; padding: 5px; background: rgba(255,255,255,.96); border: 1px solid rgba(60,60,67,.16); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+    .device-menu.show { display: block; }
+    .device-menu button { display: flex; width: 100%; align-items: center; gap: 7px; padding: 7px 8px; color: var(--red); background: transparent; border-radius: 5px; font-size: 12px; text-align: left; }
+    .device-menu button:hover { background: rgba(255,59,48,.09); }
+    .device-menu svg { width: 14px; height: 14px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 22px; border-top: 1px solid var(--separator); }
+    .metric { padding: 15px 15px 16px 0; }
+    .metric + .metric { padding-left: 15px; border-left: 1px solid var(--separator); }
+    .metric-label { display: block; margin-bottom: 4px; color: var(--secondary); font-size: 11px; }
+    .metric strong { font-size: 18px; font-weight: 620; font-variant-numeric: tabular-nums; }
+    .metric .unit { margin-left: 2px; color: var(--secondary); font-size: 11px; }
+    .throughput { display: grid; grid-template-columns: minmax(0, 1fr) 128px; gap: 18px; align-items: center; padding: 15px 0 17px; border-top: 1px solid var(--separator); }
+    .throughput-label { display: flex; justify-content: space-between; margin-bottom: 7px; color: var(--secondary); font-size: 11px; }
+    .throughput-label strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .graph { position: relative; height: 31px; overflow: hidden; border-bottom: 1px solid rgba(52,199,89,.25); }
+    .graph svg { width: 100%; height: 100%; overflow: visible; }
+    .stream-summary { color: var(--secondary); font-size: 11px; line-height: 1.5; }
+    .stream-summary b { color: var(--ink); font-weight: 600; }
+
+    .list-group { overflow: hidden; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.02); }
+    .list-row { display: flex; min-height: 61px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--separator); }
+    .list-row:last-child { border-bottom: 0; }
+    .list-row.interactive { cursor: pointer; transition: background .13s ease; }
+    .list-row.interactive:hover { background: #f8f8fa; }
+    .list-row.selected { background: rgba(0,122,255,.055); }
+    .list-title { flex: 1; min-width: 0; }
+    .list-title strong { display: block; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .list-title small { display: block; overflow: hidden; margin-top: 3px; color: var(--secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .row-meta { color: var(--secondary); font-size: 11px; text-align: right; }
+    .row-meta .online-text { color: #188240; }
+    .chevron { color: var(--tertiary); }
+    .chevron svg { width: 15px; height: 15px; }
+
+    .setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); overflow: hidden; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; }
+    .setup-step { position: relative; min-height: 134px; padding: 18px; border-right: 1px solid var(--separator); }
+    .setup-step:last-child { border-right: none; }
+    .step-mark { display: grid; width: 22px; height: 22px; margin-bottom: 13px; place-items: center; color: white; background: var(--green); border-radius: 50%; }
+    .step-mark.pending { color: #bb7100; background: #fff0d7; }
+    .step-mark svg { width: 13px; height: 13px; }
+    .setup-step strong { display: block; font-size: 13px; font-weight: 600; }
+    .setup-step p { margin: 4px 0 11px; color: var(--secondary); font-size: 11px; line-height: 1.4; }
+    .text-action { padding: 0; color: var(--blue); background: transparent; font-size: 11px; }
+    .text-action:hover { text-decoration: underline; }
+
+    .device-detail { display: grid; grid-template-columns: minmax(310px, 1.2fr) minmax(255px, .8fr); gap: 20px; }
+    .detail-panel { overflow: hidden; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; }
+    .detail-panel-header { display: flex; align-items: center; gap: 12px; padding: 18px; border-bottom: 1px solid var(--separator); }
+    .detail-panel-header h3 { margin: 0; color: var(--ink); font-size: 15px; }
+    .detail-panel-header p { margin: 2px 0 0; color: var(--secondary); font-size: 11px; }
+    .detail-cell { display: flex; justify-content: space-between; gap: 20px; padding: 12px 18px; border-bottom: 1px solid var(--separator); }
+    .detail-cell:last-child { border-bottom: 0; }
+    .detail-cell span { color: var(--secondary); font-size: 12px; }
+    .detail-cell b { font-size: 12px; font-weight: 550; text-align: right; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px !important; }
+    .aside-callout { padding: 17px; border-radius: 10px; background: rgba(0,122,255,.08); border: 1px solid rgba(0,122,255,.15); }
+    .aside-callout svg { width: 19px; height: 19px; color: var(--blue); }
+    .aside-callout h3 { margin: 10px 0 4px; color: var(--ink); font-size: 13px; }
+    .aside-callout p { margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.45; }
+    .aside-callout .button-secondary { margin-top: 14px; font-size: 12px; }
+
+    .test-status { display: flex; align-items: center; gap: 9px; padding: 11px 13px; margin-bottom: 18px; color: #177a39; background: rgba(52,199,89,.09); border-radius: 8px; font-size: 12px; }
+    .test-status svg { width: 16px; height: 16px; }
+    .diagnostic-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+    .diagnostic-box { padding: 17px; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; }
+    .diagnostic-box .caption { display: block; color: var(--secondary); font-size: 11px; }
+    .diagnostic-box strong { display: block; margin-top: 6px; font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .diagnostic-box p { margin: 5px 0 0; color: var(--secondary); font-size: 11px; line-height: 1.45; }
+    .quality-line { display: flex; align-items: center; gap: 11px; margin-top: 21px; padding: 15px 0 0; border-top: 1px solid var(--separator); }
+    .quality-meter { display: flex; flex: 1; gap: 4px; }
+    .quality-meter i { display: block; flex: 1; height: 5px; background: #d7d7dc; border-radius: 99px; }
+    .quality-meter i.good { background: var(--green); }
+    .quality-line b { font-size: 12px; font-weight: 600; }
+    .disclosure { padding: 0; color: var(--blue); background: transparent; font-size: 12px; }
+    .method-note { display: none; padding: 12px 14px; margin-top: 10px; color: var(--secondary); background: rgba(118,118,128,.09); border-radius: 8px; font-size: 12px; line-height: 1.5; }
+    .method-note.show { display: block; }
+
+    .preference-group { overflow: hidden; margin-bottom: 20px; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; }
+    .preference-row { display: flex; min-height: 55px; align-items: center; gap: 15px; padding: 9px 15px; border-bottom: 1px solid var(--separator); }
+    .preference-row:last-child { border-bottom: 0; }
+    .preference-row strong { display: block; font-size: 13px; font-weight: 550; }
+    .preference-row p { margin: 3px 0 0; color: var(--secondary); font-size: 11px; }
+    .switch { position: relative; flex: 0 0 auto; width: 34px; height: 20px; margin-left: auto; padding: 2px; background: #8e8e93; border-radius: 99px; transition: background .15s ease; }
+    .switch.on { background: var(--green); }
+    .switch::after { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; content: ""; background: white; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s ease; }
+    .switch.on::after { transform: translateX(14px); }
+
+    .modal-wrap { display: none; position: fixed; z-index: 10; inset: 0; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.24); backdrop-filter: blur(3px); }
+    .modal-wrap.show { display: flex; }
+    .modal { width: min(420px, 100%); overflow: hidden; background: rgba(250,250,252,.96); border: 1px solid rgba(255,255,255,.8); border-radius: 12px; box-shadow: var(--shadow); }
+    .modal header { padding: 18px 20px 13px; }
+    .modal h2 { margin: 0; font-size: 17px; font-weight: 650; }
+    .modal header p { margin: 4px 0 0; color: var(--secondary); font-size: 12px; }
+    .modal-body { padding: 0 20px 20px; }
+    .modal-body label { display: block; margin: 12px 0 6px; color: var(--secondary); font-size: 11px; font-weight: 500; }
+    .modal-body input { width: 100%; height: 31px; padding: 0 9px; color: var(--ink); background: white; border: 1px solid var(--separator); border-radius: 6px; }
+    .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; background: rgba(118,118,128,.07); border-top: 1px solid var(--separator); }
+    .button-danger { padding: 0 11px; color: white; background: var(--red); }
+    .version-grid { overflow: hidden; margin: 0 20px 20px; background: white; border: 1px solid var(--separator); border-radius: 8px; }
+    .version-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 11px 12px; border-bottom: 1px solid var(--separator); }
+    .version-row:last-child { border-bottom: 0; }
+    .version-row span { color: var(--secondary); font-size: 11px; }
+    .version-row b { font-size: 12px; font-weight: 600; text-align: right; }
+    .compatibility-result { display: flex; align-items: center; gap: 8px; padding: 11px 20px 0; color: #16823c; font-size: 12px; font-weight: 600; }
+    .compatibility-result.incompatible { color: #b66b00; }
+    .compatibility-result.unknown { color: var(--secondary); }
+    .compatibility-result svg { width: 16px; height: 16px; }
+    .toast { position: fixed; z-index: 15; right: 22px; bottom: 22px; display: flex; align-items: center; gap: 9px; max-width: 360px; padding: 11px 13px; color: white; background: rgba(35,35,37,.9); border-radius: 8px; box-shadow: 0 8px 25px rgba(0,0,0,.2); font-size: 12px; opacity: 0; pointer-events: none; transform: translateY(9px); transition: opacity .18s, transform .18s; }
+    .toast.show { opacity: 1; transform: none; }
+    .toast svg { width: 15px; height: 15px; color: #6ee788; }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 850px) {
+      body { min-width: 0; }
+      .app-window { grid-template-columns: 190px minmax(0, 1fr); }
+      .page { padding: 30px 22px; }
+      .metrics, .identity-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .identity-fact:nth-child(3) { grid-column: 1 / -1; padding: 13px 0 0; margin-top: 13px; border-top: 1px solid var(--separator); border-left: 0; }
+      .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--separator); }
+      .metric:nth-child(4) { border-top: 1px solid var(--separator); }
+      .setup-grid, .device-detail { grid-template-columns: 1fr; }
+      .setup-step { min-height: 0; border-right: 0; border-bottom: 1px solid var(--separator); }
+      .setup-step:last-child { border-bottom: 0; }
+      .role-bar, .host-config, .receiver-config { align-items: flex-start; flex-direction: column; grid-template-columns: 1fr; }
+      .host-options { width: 100%; justify-content: space-between; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="app-window">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand"><span class="brand-mark"><i data-lucide="cable"></i></span>Thunder Display</div>
+      <div class="sidebar-label">设备</div>
+      <div id="saved-devices"></div>
+      <button class="nav-item" id="add-device-side"><i data-lucide="plus"></i>添加设备</button>
+      <div class="sidebar-label">工具</div>
+      <button class="nav-item" data-page="diagnostics"><i data-lucide="activity"></i>配置检查</button>
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-page="settings"><i data-lucide="settings"></i>偏好设置</button>
+        <button class="version-status" id="open-version" aria-label="查看版本兼容性">
+          <span><strong id="sidebar-local-version">本机 v3.5.2</strong></span>
+          <small id="sidebar-receiver-version">对端 v3.5.2</small>
+          <span class="version-state" id="sidebar-version-state">已兼容</span>
+        </button>
+      </div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <h1 id="toolbar-title">iMac 5K</h1>
+        <div class="toolbar-actions">
+          <button class="icon-button" id="refresh" aria-label="刷新设备" title="刷新设备"><i data-lucide="rotate-cw"></i></button>
+          <button class="button-secondary" id="toolbar-test"><i data-lucide="gauge"></i>检测雷雳线</button>
+          <button class="button-primary" id="toolbar-connect"><i data-lucide="link"></i><span id="connect-label">连接</span></button>
+        </div>
+      </div>
+
+      <section class="page active" id="current-device" aria-labelledby="hero-device-name">
+        <div class="section">
+          <div class="session-hero" id="session-hero">
+            <div class="session-top">
+              <div class="device-avatar"><i data-lucide="monitor-up"></i></div>
+              <div class="session-copy"><h3 id="hero-device-name">iMac 5K</h3><p id="hero-device-detail">Thunderbolt Bridge · 169.254.44.2 · 配对凭据已保存</p></div>
+              <div class="session-actions">
+                <button class="version-chip" id="hero-version" aria-label="查看版本兼容性"><i data-lucide="shield-check"></i><span id="hero-version-text">版本已兼容</span></button>
+                <span class="connection-pill" id="connection-pill"><i></i><span>正在连接</span></span>
+                <button class="icon-button" id="device-actions" aria-label="设备选项" title="设备选项" aria-expanded="false"><i data-lucide="ellipsis"></i></button>
+              </div>
+            </div>
+            <div class="device-menu" id="device-menu"><button id="forget-device"><i data-lucide="trash-2"></i>忘记此设备</button></div>
+            <div class="version-warning" id="version-warning"><i data-lucide="triangle-alert"></i><span id="version-warning-text"></span><button class="text-action" id="open-version-warning">查看版本</button></div>
+            <div class="identity-grid" aria-label="对端设备身份">
+              <div class="identity-fact"><span>设备名称</span><strong id="identity-name">卓尔的 iMac</strong></div>
+              <div class="identity-fact"><span>设备型号</span><strong id="identity-model">iMac (Retina 5K, 27-inch, 2020)</strong></div>
+              <div class="identity-fact"><span>系统版本</span><strong id="identity-system">macOS 15.3.2</strong></div>
+            </div>
+            <div class="role-bar">
+              <div class="role-copy"><small>本机角色</small><strong id="role-description">这台 Mac 正在作为主机</strong></div>
+              <div class="segmented-control" role="group" aria-label="本机角色">
+                <button class="segment active" data-local-role="host" aria-pressed="true">主机</button>
+                <button class="segment" data-local-role="display" aria-pressed="false">显示器</button>
+              </div>
+            </div>
+            <div class="host-config" id="host-config">
+              <div class="route-copy"><i data-lucide="monitor-up"></i><div><span>主机输出</span><strong id="host-target">将桌面扩展到 iMac 5K</strong></div></div>
+              <div class="host-options">
+                <div class="segmented-control mode-control" role="group" aria-label="显示模式">
+                  <button class="segment active" data-output-mode="extend" aria-pressed="true">扩展</button>
+                  <button class="segment" data-output-mode="mirror" aria-pressed="false">镜像</button>
+                </div>
+                <div class="audio-control"><span>音频中继</span><button class="switch on" id="audio-relay" aria-label="切换音频中继" aria-pressed="true"></button></div>
+              </div>
+            </div>
+            <div class="receiver-config" id="receiver-config" hidden>
+              <div class="route-copy"><i data-lucide="monitor-down"></i><div><span>显示器接收</span><strong id="receiver-target">等待 iMac 5K 从主机侧开始投送</strong></div></div>
+              <div class="audio-control"><span>防止息屏</span><button class="switch on" id="prevent-sleep" aria-label="切换显示器模式防止息屏" aria-pressed="true"></button></div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><span class="metric-label">当前流量</span><strong id="metric-throughput">12.8</strong><span class="unit">Gbit/s</span></div>
+              <div class="metric"><span class="metric-label">帧率</span><strong id="metric-fps">58</strong><span class="unit">fps</span></div>
+              <div class="metric"><span class="metric-label">往返延迟</span><strong id="metric-latency">3</strong><span class="unit">ms</span></div>
+              <div class="metric"><span class="metric-label">编码</span><strong id="metric-codec">HEVC</strong></div>
+            </div>
+            <div class="throughput">
+              <div><div class="throughput-label"><span>过去 60 秒传输速率</span><strong id="graph-value">12.8 Gbit/s</strong></div><div class="graph"><svg viewBox="0 0 600 31" preserveAspectRatio="none" aria-label="传输速率变化"><path id="graph-line" d="M0 22 L35 19 L70 20 L105 14 L140 17 L175 12 L210 16 L245 11 L280 15 L315 8 L350 13 L385 10 L420 16 L455 11 L490 14 L525 7 L560 10 L600 8" fill="none" stroke="#34c759" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div></div>
+              <div class="stream-summary"><b>5K 扩展显示</b><br>5120 × 2880 · 音频中继开启</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section"><h3>配置引导</h3>
+          <div class="setup-grid">
+            <div class="setup-step"><span class="step-mark"><i data-lucide="check"></i></span><strong>允许屏幕录制</strong><p>发送端已准备好捕获桌面。</p><button class="text-action" data-settings="privacy">打开隐私与安全性</button></div>
+            <div class="setup-step"><span class="step-mark pending"><i data-lucide="layout-panel-top"></i></span><strong>排列显示器</strong><p>将虚拟显示器放到合适的位置。</p><button class="text-action" data-settings="displays">打开显示器设置</button></div>
+            <div class="setup-step"><span class="step-mark"><i data-lucide="check"></i></span><strong>允许本地网络</strong><p>雷雳桥接网络可用于发现和连接。</p><button class="text-action" data-settings="network">打开网络设置</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="diagnostics">
+        <div class="page-head"><div><h2>配置检查</h2><p>同时验证当前链路的协商能力和实际图传余量。</p></div><button class="button-primary heading-action" id="run-test"><i data-lucide="gauge"></i><span id="test-button-label">运行检测</span></button></div>
+        <div class="test-status" id="test-status"><i data-lucide="circle-check"></i><span>样例结果：当前链路满足 5K HEVC 图传。</span></div>
+        <div class="diagnostic-grid">
+          <div class="diagnostic-box"><span class="caption">协商链路</span><strong id="diag-link">Thunderbolt 4</strong><p id="diag-link-detail">40 Gbit/s · 双向 · 雷雳桥接</p></div>
+          <div class="diagnostic-box"><span class="caption">线材模式</span><strong id="diag-cable">被动线</strong><p>由 USB-C e-marker 与活动雷雳拓扑报告交叉验证。</p></div>
+          <div class="diagnostic-box"><span class="caption">可用图传吞吐</span><strong id="diag-throughput">17.4 Gbit/s</strong><p>两端实测 TCP 有效吞吐；不等同于线材额定带宽。</p></div>
+          <div class="diagnostic-box"><span class="caption">当前图传需求</span><strong>12.8 Gbit/s</strong><p>5K · HEVC · 58 fps · 音频中继开启</p></div>
+        </div>
+        <div class="quality-line"><div class="quality-meter" aria-label="链路余量 4/5"><i class="good"></i><i class="good"></i><i class="good"></i><i class="good"></i><i></i></div><b>图传余量充足</b></div>
+        <div class="section"><h3>结果边界</h3><button class="disclosure" id="toggle-method">查看此检测能证明什么</button><div class="method-note" id="method-note">“Thunderbolt 4”和“被动线”来自 macOS IOKit 可用的 e-marker 与雷雳拓扑信息，缺失时必须显示“无法识别”，不能猜测。吞吐测试只评价这一次两端设备、端口、转接链和线材构成的实际链路；它可以支持“满足当前图传”的结论，不能证明线材没有物理缺陷。</div></div>
+      </section>
+
+      <section class="page" id="settings">
+        <div class="page-head"><div><h2>偏好设置</h2><p>将少量全局选择放在这里，连接相关选项留在设备详情内。</p></div></div>
+        <div class="section"><h3>连接</h3><div class="preference-group"><div class="preference-row"><div><strong>唤醒后自动重连</strong><p>恢复此前正在使用的设备。</p></div><button class="switch on" data-setting="autoReconnect" aria-label="切换唤醒后自动重连"></button></div><div class="preference-row"><div><strong>显示菜单栏状态</strong><p>在菜单栏显示活动会话。</p></div><button class="switch on" data-setting="menuBarStatus" aria-label="切换菜单栏状态"></button></div></div></div>
+        <div class="section"><h3>诊断</h3><div class="preference-group"><div class="preference-row"><div><strong>连接前检查配置</strong><p>连接前检查屏幕录制、网络路径和所需权限。</p></div><button class="switch on" data-setting="preflight" aria-label="切换连接前检查"></button></div><div class="preference-row"><div><strong>保留最近检测</strong><p>为每台设备显示最近一次有效吞吐结果。</p></div><button class="switch on" data-setting="keepDiagnostics" aria-label="切换保留检测"></button></div></div><button class="text-action" id="reset-settings">恢复默认设置</button></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-wrap" id="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="modal"><header><h2 id="add-title">添加设备</h2><p>连接一次后，地址和配对凭据将被安全保存。</p></header><div class="modal-body"><label for="device-name">设备名称</label><input id="device-name" autocomplete="off" placeholder="例如：书房 iMac"><label for="device-ip">雷雳桥接地址</label><input id="device-ip" class="code" autocomplete="off" placeholder="169.254.x.x"><label for="device-code">配对码</label><input id="device-code" autocomplete="off" placeholder="仅用于模拟保存到钥匙串"></div><footer><button class="button-secondary" id="modal-cancel">取消</button><button class="button-primary" id="modal-save">保存设备</button></footer></div>
+  </div>
+  <div class="modal-wrap" id="version-modal" role="dialog" aria-modal="true" aria-labelledby="version-title">
+    <div class="modal"><header><h2 id="version-title">版本兼容性</h2><p id="version-subtitle">连接前会比较通信协议级别。</p></header><div class="compatibility-result" id="compatibility-result"><i data-lucide="shield-check"></i><span>协议兼容，可以连接。</span></div><div class="version-grid"><div class="version-row"><span id="modal-local-build-label">本机安装版本</span><b>3.5.2</b></div><div class="version-row"><span id="modal-local-protocol-label">本机协议级别</span><b>3.5</b></div><div class="version-row"><span id="modal-receiver-build-label">对端安装版本</span><b id="modal-receiver-build">3.5.2</b></div><div class="version-row"><span id="modal-receiver-protocol-label">对端协议级别</span><b id="modal-receiver-protocol">3.5</b></div></div><footer><button class="button-secondary" id="version-refresh"><i data-lucide="rotate-cw"></i>重新发现</button><button class="button-primary" id="version-close">完成</button></footer></div>
+  </div>
+  <div class="modal-wrap" id="role-modal" role="dialog" aria-modal="true" aria-labelledby="role-title">
+    <div class="modal"><header><h2 id="role-title">切换本机角色？</h2><p id="role-copy">切换角色会停止当前显示会话。</p></header><footer><button class="button-secondary" id="role-cancel">取消</button><button class="button-primary" id="role-confirm">切换角色</button></footer></div>
+  </div>
+  <div class="modal-wrap" id="forget-modal" role="dialog" aria-modal="true" aria-labelledby="forget-title">
+    <div class="modal"><header><h2 id="forget-title">忘记此设备？</h2><p id="forget-copy">将移除设备地址和本机钥匙串中的配对凭据。</p></header><footer><button class="button-secondary" id="forget-cancel">取消</button><button class="button-danger" id="forget-confirm">忘记设备</button></footer></div>
+  </div>
+  <div class="toast" id="toast"><i data-lucide="circle-check"></i><span id="toast-text"></span></div>
+
+  <script>
+    const initialDevices = [
+      { id: 'imac', name: '卓尔的 iMac', model: 'iMac (Retina 5K, 27-inch, 2020)', systemVersion: 'macOS 15.3.2', ip: '169.254.44.2', icon: 'monitor-up', state: 'online', profile: '5K 扩展显示', last: '刚刚', detail: 'Thunderbolt Bridge · 169.254.44.2 · 配对凭据已保存', receiverVersion: '3.5.2', protocolVersion: '3.5' },
+      { id: 'studio', name: '工作室 Mac Studio', model: 'Mac Studio (M2 Max, 2023)', systemVersion: 'macOS 14.6.1', ip: '169.254.44.3', icon: 'monitor', state: 'away', profile: '低延迟镜像', last: '昨天', detail: '上次使用：Thunderbolt Bridge · 配对凭据已保存', receiverVersion: '3.4.8', protocolVersion: '3.4' }
+    ];
+    const storedDevices = JSON.parse(localStorage.getItem('tb-mvp-devices') || 'null');
+    let devices = (storedDevices || initialDevices).map((device) => ({
+      ...device,
+      receiverVersion: device.receiverVersion === undefined ? (device.id === 'studio' ? '3.4.8' : '3.5.2') : device.receiverVersion,
+      protocolVersion: device.protocolVersion === undefined ? (device.id === 'studio' ? '3.4' : '3.5') : device.protocolVersion,
+      model: device.model === undefined ? (device.id === 'imac' ? 'iMac (Retina 5K, 27-inch, 2020)' : device.id === 'studio' ? 'Mac Studio (M2 Max, 2023)' : null) : device.model,
+      systemVersion: device.systemVersion === undefined ? (device.id === 'imac' ? 'macOS 15.3.2' : device.id === 'studio' ? 'macOS 14.6.1' : null) : device.systemVersion
+    }));
+    const senderVersion = '3.5.2';
+    const senderProtocol = '3.5';
+    let connectedId = 'imac';
+    let selectedId = devices.some((device) => device.id === connectedId)
+      ? connectedId
+      : (localStorage.getItem('tb-mvp-selected') || devices[0].id);
+    let localRole = localStorage.getItem('tb-mvp-local-role') || 'host';
+    let outputMode = localStorage.getItem('tb-mvp-output-mode') || 'extend';
+    let audioRelay = localStorage.getItem('tb-mvp-audio-relay') !== 'false';
+    let preventSleep = localStorage.getItem('tb-mvp-prevent-sleep') !== 'false';
+    let pendingRole = null;
+    let toastTimer;
+
+    const $ = (selector) => document.querySelector(selector);
+    function selected() { return devices.find((device) => device.id === selectedId) || devices[0]; }
+    function iconFor(device) { return `<i data-lucide="${device.icon}"></i>`; }
+    function statusText(device) { return device.id === connectedId ? '正在连接' : device.state === 'online' ? '可连接' : '等待设备插入'; }
+    function compatibilityFor(device) {
+      if (!device.protocolVersion) return 'unknown';
+      return device.protocolVersion === senderProtocol ? 'compatible' : 'incompatible';
+    }
+    function compatibilityLabel(status) {
+      return { compatible: '已兼容', incompatible: '需要更新', unknown: '待验证' }[status];
+    }
+    function updateIcons() { if (window.lucide) lucide.createIcons(); }
+    function persist() {
+      localStorage.setItem('tb-mvp-devices', JSON.stringify(devices));
+      localStorage.setItem('tb-mvp-selected', selectedId);
+      localStorage.setItem('tb-mvp-local-role', localRole);
+      localStorage.setItem('tb-mvp-output-mode', outputMode);
+      localStorage.setItem('tb-mvp-audio-relay', String(audioRelay));
+      localStorage.setItem('tb-mvp-prevent-sleep', String(preventSleep));
+    }
+    function showToast(message) { $('#toast-text').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2800); }
+
+    function renderDevices() {
+      const side = $('#saved-devices');
+      side.innerHTML = devices.map((device) => `<button class="device-side-item ${device.id === selectedId ? 'active' : ''}" data-device="${device.id}">${iconFor(device)}<span class="device-label"><span class="device-name">${device.name}</span><small>${device.model || '型号待发现'} · ${device.systemVersion || '系统版本待发现'}</small></span><i class="sidebar-status ${device.id === connectedId || device.state === 'online' ? 'online' : 'away'}"></i></button>`).join('');
+      document.querySelectorAll('[data-device]').forEach((element) => element.addEventListener('click', () => selectDevice(element.dataset.device, true)));
+      renderDetail(); updateIcons();
+    }
+    function renderRoleControls() {
+      const device = selected();
+      const isHost = localRole === 'host';
+      const localRoleName = isHost ? '主机' : '显示器';
+      const remoteRoleName = isHost ? '显示器' : '主机';
+      $('#role-description').textContent = `这台 Mac 正在作为${localRoleName}`;
+      document.querySelectorAll('[data-local-role]').forEach((button) => {
+        const active = button.dataset.localRole === localRole;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      $('#host-config').hidden = !isHost;
+      $('#receiver-config').hidden = isHost;
+      $('#host-target').textContent = `${outputMode === 'extend' ? '将桌面扩展到' : '镜像到'} ${device.name}`;
+      $('#receiver-target').textContent = `等待 ${device.name} 从主机侧开始投送`;
+      document.querySelectorAll('[data-output-mode]').forEach((button) => {
+        const active = button.dataset.outputMode === outputMode;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      $('#audio-relay').classList.toggle('on', audioRelay);
+      $('#audio-relay').setAttribute('aria-pressed', String(audioRelay));
+      $('#prevent-sleep').classList.toggle('on', preventSleep);
+      $('#prevent-sleep').setAttribute('aria-pressed', String(preventSleep));
+      $('#sidebar-local-version').textContent = `本机（${localRoleName}）v${senderVersion}`;
+      $('#sidebar-receiver-version').textContent = `${device.name}（${remoteRoleName}）v${device.receiverVersion || '待发现'}`;
+      $('#modal-local-build-label').textContent = `本机（${localRoleName}）安装版本`;
+      $('#modal-local-protocol-label').textContent = `本机（${localRoleName}）协议级别`;
+      $('#modal-receiver-build-label').textContent = `${device.name}（${remoteRoleName}）安装版本`;
+      $('#modal-receiver-protocol-label').textContent = `${device.name}（${remoteRoleName}）协议级别`;
+    }
+    function renderDetail() {
+      const device = selected();
+      const isLive = device.id === connectedId;
+      const compatibility = compatibilityFor(device);
+      const isHost = localRole === 'host';
+      $('#hero-device-name').textContent = device.name;
+      $('#hero-device-detail').textContent = device.detail;
+      $('#identity-name').textContent = device.name || '名称待发现';
+      $('#identity-model').textContent = device.model || '型号待发现';
+      $('#identity-system').textContent = device.systemVersion || '系统版本待发现';
+      $('#connection-pill').innerHTML = isLive
+        ? `<i></i><span>${isHost ? '正在扩展' : '正在接收'}</span>`
+        : '<i style="background: var(--secondary)"></i><span>未连接</span>';
+      $('#connect-label').textContent = isLive
+        ? (isHost ? '停止扩展' : '停止接收')
+        : (isHost ? `${outputMode === 'extend' ? '扩展到' : '镜像到'} ${device.name}` : `作为显示器连接`);
+      $('#toolbar-title').textContent = `${isHost ? '主机' : '显示器'} · ${device.name}`;
+      $('#toolbar-connect').disabled = compatibility === 'incompatible';
+      $('#toolbar-connect').title = compatibility === 'incompatible' ? '接收端协议不兼容，需要更新' : '';
+      $('#metric-throughput').textContent = isLive ? '12.8' : '—';
+      $('#metric-fps').textContent = isLive ? '58' : '—';
+      $('#metric-latency').textContent = isLive ? '3' : '—';
+      $('#metric-codec').textContent = isLive ? 'HEVC' : '—';
+      $('#graph-value').textContent = isLive ? '12.8 Gbit/s' : '等待连接';
+      $('#graph-line').setAttribute('d', isLive ? 'M0 22 L35 19 L70 20 L105 14 L140 17 L175 12 L210 16 L245 11 L280 15 L315 8 L350 13 L385 10 L420 16 L455 11 L490 14 L525 7 L560 10 L600 8' : 'M0 28 L600 28');
+      $('#graph-line').setAttribute('stroke', isLive ? '#34c759' : '#d2d2d7');
+      document.querySelector('.stream-summary').innerHTML = isLive
+        ? (isHost
+          ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>5120 × 2880 · 音频中继${audioRelay ? '开启' : '关闭'}`
+          : `<b>正在接收 ${device.name} 的画面</b><br>作为显示器 · 防止息屏${preventSleep ? '开启' : '关闭'}`)
+        : (isHost
+          ? `<b>等待 ${device.name}</b><br>连接后将恢复 ${device.profile}`
+          : `<b>等待 ${device.name} 开始投送</b><br>作为显示器 · 防止息屏${preventSleep ? '开启' : '关闭'}`);
+      renderRoleControls();
+      updateVersionUI(device, compatibility);
+      updateIcons();
+    }
+    function updateVersionUI(device, compatibility = compatibilityFor(device)) {
+      const receiverBuild = device.receiverVersion || '尚未发现';
+      const receiverProtocol = device.protocolVersion || '待握手验证';
+      $('#sidebar-version-state').textContent = compatibilityLabel(compatibility);
+      $('#open-version').className = `version-status ${compatibility}`;
+      $('#hero-version').className = `version-chip ${compatibility}`;
+      $('#hero-version-text').textContent = compatibility === 'compatible' ? '版本已兼容' : compatibility === 'incompatible' ? '需要更新' : '待验证版本';
+      $('#modal-receiver-build').textContent = receiverBuild;
+      $('#modal-receiver-protocol').textContent = receiverProtocol;
+      $('#version-subtitle').textContent = `${device.name} 的安装版本与协议级别`;
+      const result = $('#compatibility-result');
+      result.className = `compatibility-result ${compatibility}`;
+      result.innerHTML = compatibility === 'compatible'
+        ? '<i data-lucide="shield-check"></i><span>协议兼容，可以连接。</span>'
+        : compatibility === 'incompatible'
+          ? '<i data-lucide="triangle-alert"></i><span>协议级别不同，连接已阻止。</span>'
+          : '<i data-lucide="circle-help"></i><span>首次连接时将验证接收端协议。</span>';
+      $('#version-warning').classList.toggle('show', compatibility === 'incompatible');
+      $('#version-warning-text').textContent = compatibility === 'incompatible'
+        ? `对端协议 ${receiverProtocol} 与本机协议 ${senderProtocol} 不匹配。更新对端后才能连接。`
+        : '';
+    }
+    function selectDevice(id, announce) {
+      selectedId = id; persist(); showPage('current-device'); renderDevices();
+      if (announce) showToast(`已选择 ${selected().name}`);
+    }
+    function connectSelected() {
+      const device = selected();
+      if (compatibilityFor(device) === 'incompatible') { openVersionModal(); return; }
+      if (connectedId === device.id) {
+        connectedId = null;
+        showToast(localRole === 'host' ? `已停止扩展到 ${device.name}` : `已停止接收 ${device.name} 的画面`);
+      }
+      else {
+        const needsVerification = compatibilityFor(device) === 'unknown';
+        if (needsVerification) { device.receiverVersion = senderVersion; device.protocolVersion = senderProtocol; }
+        connectedId = device.id; device.state = 'online'; device.last = '刚刚';
+        if (needsVerification) showToast(`已验证版本，正在${localRole === 'host' ? '扩展到' : '接收来自'} ${device.name}`);
+        else showToast(localRole === 'host' ? `正在将桌面${outputMode === 'extend' ? '扩展' : '镜像'}到 ${device.name}` : `本机正在接收 ${device.name} 的画面`);
+      }
+      persist(); renderDevices();
+    }
+    function requestRole(role) {
+      if (role === localRole) return;
+      if (!connectedId) { applyRole(role); return; }
+      pendingRole = role;
+      $('#role-copy').textContent = `切换为${role === 'host' ? '主机' : '显示器'}会停止当前与 ${selected().name} 的显示会话。`;
+      $('#role-modal').classList.add('show');
+    }
+    function applyRole(role) {
+      localRole = role;
+      connectedId = null;
+      pendingRole = null;
+      persist(); renderDevices();
+      showToast(`本机现作为${role === 'host' ? '主机' : '显示器'}，当前会话已停止`);
+    }
+    function showPage(id) {
+      document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === id));
+      document.querySelectorAll('.nav-item[data-page]').forEach((nav) => nav.classList.toggle('active', nav.dataset.page === id));
+      const titles = { 'current-device': selected().name, diagnostics: '配置检查', settings: '偏好设置' };
+      $('#toolbar-title').textContent = titles[id];
+    }
+    function openVersionModal() {
+      updateVersionUI(selected());
+      $('#version-modal').classList.add('show');
+      updateIcons();
+    }
+    function closeModal(id) { $(`#${id}`).classList.remove('show'); }
+    function openForgetModal() {
+      const device = selected();
+      $('#forget-copy').textContent = `将移除“${device.name}”的地址和本机钥匙串中的配对凭据。此操作不会卸载接收端。`;
+      $('#forget-modal').classList.add('show');
+      $('#device-menu').classList.remove('show');
+    }
+    function forgetSelectedDevice() {
+      const device = selected();
+      if (devices.length === 1) { closeModal('forget-modal'); showToast('至少保留一个设备记录'); return; }
+      devices = devices.filter((item) => item.id !== device.id);
+      if (connectedId === device.id) connectedId = null;
+      selectedId = connectedId || devices[0].id;
+      persist(); closeModal('forget-modal'); renderDevices(); showToast(`已忘记 ${device.name} 及其本地配对凭据`);
+    }
+    function runTest() {
+      const button = $('#run-test'); const label = $('#test-button-label');
+      button.disabled = true; label.textContent = '正在检测'; $('#test-status').innerHTML = '<i class="spin" data-lucide="loader-circle"></i><span>正在演示链路吞吐与协商能力的检测状态…</span>'; updateIcons();
+      setTimeout(() => {
+        const speed = (16.8 + Math.random() * 1.6).toFixed(1);
+        $('#diag-throughput').textContent = `${speed} Gbit/s`;
+        $('#test-status').innerHTML = '<i data-lucide="circle-check"></i><span>样例检测完成：当前链路满足 5K HEVC 图传。</span>';
+        label.textContent = '重新检测'; button.disabled = false; updateIcons(); showToast('雷雳链路检测已完成');
+      }, 1400);
+    }
+    function tickMetrics() {
+      if (!connectedId || selected().id !== connectedId) return;
+      const throughput = (12.1 + Math.random() * 1.5).toFixed(1); const fps = 57 + Math.round(Math.random() * 2);
+      $('#metric-throughput').textContent = throughput; $('#metric-fps').textContent = fps; $('#graph-value').textContent = `${throughput} Gbit/s`;
+      const points = Array.from({length: 18}, (_, index) => `${index ? 'L' : 'M'}${Math.round(index * 35.3)} ${7 + Math.round(Math.random() * 15)}`).join(' ');
+      $('#graph-line').setAttribute('d', points);
+    }
+
+    document.querySelectorAll('.nav-item[data-page]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
+    $('#toolbar-connect').addEventListener('click', connectSelected);
+    $('#toolbar-test').addEventListener('click', () => { showPage('diagnostics'); runTest(); });
+    $('#run-test').addEventListener('click', runTest);
+    $('#refresh').addEventListener('click', () => { showToast('已刷新设备发现与本地接口'); });
+    document.querySelectorAll('[data-local-role]').forEach((button) => button.addEventListener('click', () => requestRole(button.dataset.localRole)));
+    document.querySelectorAll('[data-output-mode]').forEach((button) => button.addEventListener('click', () => {
+      if (localRole !== 'host') return;
+      outputMode = button.dataset.outputMode;
+      persist(); renderDetail(); showToast(`主机输出已切换为${outputMode === 'extend' ? '扩展显示' : '镜像显示'}`);
+    }));
+    $('#audio-relay').addEventListener('click', () => {
+      if (localRole !== 'host') return;
+      audioRelay = !audioRelay;
+      persist(); renderDetail(); showToast(audioRelay ? '主机音频中继已开启' : '主机音频中继已关闭');
+    });
+    $('#prevent-sleep').addEventListener('click', () => {
+      if (localRole !== 'display') return;
+      preventSleep = !preventSleep;
+      persist(); renderDetail(); showToast(preventSleep ? '显示器模式将防止息屏' : '显示器模式将遵循系统息屏设置');
+    });
+    $('#toggle-method').addEventListener('click', () => $('#method-note').classList.toggle('show'));
+    $('#open-version').addEventListener('click', openVersionModal);
+    $('#hero-version').addEventListener('click', openVersionModal);
+    $('#open-version-warning').addEventListener('click', openVersionModal);
+    $('#version-close').addEventListener('click', () => closeModal('version-modal'));
+    $('#version-refresh').addEventListener('click', () => { showToast(`已重新发现 ${selected().name} 的版本信息`); });
+    $('#device-actions').addEventListener('click', () => {
+      const menu = $('#device-menu');
+      const visible = menu.classList.toggle('show');
+      $('#device-actions').setAttribute('aria-expanded', String(visible));
+    });
+    $('#forget-device').addEventListener('click', openForgetModal);
+    $('#forget-cancel').addEventListener('click', () => closeModal('forget-modal'));
+    $('#forget-confirm').addEventListener('click', forgetSelectedDevice);
+    $('#role-cancel').addEventListener('click', () => { pendingRole = null; closeModal('role-modal'); });
+    $('#role-confirm').addEventListener('click', () => { if (pendingRole) applyRole(pendingRole); closeModal('role-modal'); });
+    const defaultSettings = { autoReconnect: true, menuBarStatus: true, preflight: true, keepDiagnostics: true };
+    const settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem('tb-mvp-settings') || '{}') };
+    function renderSettings() {
+      document.querySelectorAll('.switch[data-setting]').forEach((switchButton) => {
+        const enabled = settings[switchButton.dataset.setting];
+        switchButton.classList.toggle('on', enabled);
+        switchButton.setAttribute('aria-pressed', String(enabled));
+      });
+    }
+    document.querySelectorAll('.switch[data-setting]').forEach((switchButton) => switchButton.addEventListener('click', () => {
+      const key = switchButton.dataset.setting;
+      settings[key] = !settings[key];
+      localStorage.setItem('tb-mvp-settings', JSON.stringify(settings));
+      renderSettings(); showToast(settings[key] ? '偏好设置已开启' : '偏好设置已关闭');
+    }));
+    $('#reset-settings').addEventListener('click', () => {
+      Object.assign(settings, defaultSettings); localStorage.setItem('tb-mvp-settings', JSON.stringify(settings)); renderSettings(); showToast('已恢复默认设置');
+    });
+    document.querySelectorAll('[data-settings]').forEach((button) => button.addEventListener('click', () => {
+      const pageNames = { privacy: '隐私与安全性', displays: '显示器', network: '网络' };
+      showToast(`原生应用将打开“系统设置 > ${pageNames[button.dataset.settings]}”`);
+    }));
+    const openModal = () => { $('#add-modal').classList.add('show'); $('#device-name').focus(); };
+    $('#add-device-side').addEventListener('click', openModal);
+    $('#modal-cancel').addEventListener('click', () => $('#add-modal').classList.remove('show'));
+    $('#add-modal').addEventListener('click', (event) => { if (event.target === $('#add-modal')) $('#add-modal').classList.remove('show'); });
+    $('#modal-save').addEventListener('click', () => {
+      const name = $('#device-name').value.trim(); const ip = $('#device-ip').value.trim();
+      const isIPv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && ip.split('.').every((part) => Number(part) <= 255);
+      if (!name || !isIPv4) { showToast('请填写设备名称和有效的 IPv4 地址'); return; }
+      const id = `device-${Date.now()}`;
+      const hasPairingCode = $('#device-code').value.trim().length > 0;
+      devices.push({ id, name, model: null, systemVersion: null, ip, icon: 'laptop', state: 'away', profile: '5K 扩展显示', last: '尚未连接', detail: `雷雳桥接 · ${ip} · ${hasPairingCode ? '配对凭据已保存' : '首次连接时将配对'}`, receiverVersion: null, protocolVersion: null });
+      selectedId = id; persist(); showPage('current-device'); renderDevices(); $('#add-modal').classList.remove('show'); $('#device-name').value = ''; $('#device-ip').value = ''; $('#device-code').value = ''; showToast(`${name} 已保存，配对码将仅存于钥匙串`);
+    });
+    document.querySelectorAll('.modal-wrap').forEach((modal) => modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        if (modal.id === 'role-modal') pendingRole = null;
+        modal.classList.remove('show');
+      }
+    }));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        pendingRole = null;
+        document.querySelectorAll('.modal-wrap.show').forEach((modal) => modal.classList.remove('show'));
+        $('#device-menu').classList.remove('show');
+      }
+    });
+    renderSettings(); renderDevices(); updateIcons(); setInterval(tickMetrics, 1800);
+  </script>
+</body>
+</html>
