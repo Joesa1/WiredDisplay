@@ -43,13 +43,16 @@
     .app-window {
       display: grid;
       grid-template-columns: 230px minmax(530px, 1fr);
-      min-height: 100vh;
+      height: 100vh;
+      min-height: 0;
     }
 
     .sidebar {
       display: flex;
       flex-direction: column;
       padding: 52px 12px 14px;
+      min-height: 0;
+      overflow: hidden;
       background: var(--sidebar);
       border-right: 1px solid var(--separator);
       backdrop-filter: blur(24px) saturate(150%);
@@ -113,7 +116,7 @@
     .version-status.incompatible .version-state { color: #bd6e00; }
     .version-status.unknown .version-state { color: var(--secondary); }
 
-    main { min-width: 0; }
+    main { display: flex; min-width: 0; min-height: 0; height: 100vh; flex-direction: column; overflow: hidden; }
     .toolbar {
       display: flex;
       position: sticky;
@@ -145,7 +148,7 @@
     .button-primary:active, .button-secondary:active, .icon-button:active { transform: scale(.97); }
     .icon-button svg, .button-secondary svg, .button-primary svg { width: 15px; height: 15px; }
 
-    .page { display: none; max-width: 1160px; padding: 39px 38px 60px; }
+    .page { display: none; max-width: 1160px; min-height: 0; flex: 1; padding: 39px 38px 60px; overflow-y: auto; }
     .page.active { display: block; animation: appear .18s ease-out; }
     @keyframes appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     .page-head { display: flex; align-items: end; justify-content: space-between; margin-bottom: 26px; }
@@ -242,6 +245,10 @@
     .graph svg { width: 100%; height: 100%; overflow: visible; }
     .stream-summary { color: var(--secondary); font-size: 11px; line-height: 1.5; }
     .stream-summary b { color: var(--ink); font-weight: 600; }
+    .pairing-banner { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px; margin: 14px 0 0; color: var(--secondary); background: rgba(255,159,10,.09); border: 1px solid rgba(255,159,10,.24); border-radius: 8px; }
+    .pairing-banner strong { display: block; margin-top: 3px; color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+    .pairing-banner small { display: block; font-size: 10px; }
+    .empty-state { padding: 9px 10px; color: var(--secondary); font-size: 11px; }
 
     .list-group { overflow: hidden; background: var(--surface-solid); border: 1px solid var(--separator); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.02); }
     .list-row { display: flex; min-height: 61px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--separator); }
@@ -408,6 +415,10 @@
                 <button class="segment" data-local-role="display" aria-pressed="false">显示器</button>
               </div>
             </div>
+            <div class="pairing-banner" id="pairing-banner" hidden>
+              <div><small>本机雷雳桥接地址</small><strong id="pairing-address">等待雷雳网桥</strong></div>
+              <div><small>本机配对码</small><strong id="pairing-code">切换为显示器后生成</strong></div>
+            </div>
             <div class="host-config" id="host-config">
               <div class="route-copy"><i data-lucide="monitor-up"></i><div><span>主机输出</span><strong id="host-target">将桌面扩展到 iMac 5K</strong></div></div>
               <div class="host-options">
@@ -437,23 +448,23 @@
 
         <div class="section"><h3>配置引导</h3>
           <div class="setup-grid">
-            <div class="setup-step"><span class="step-mark"><i data-lucide="check"></i></span><strong>允许屏幕录制</strong><p>发送端已准备好捕获桌面。</p><button class="text-action" data-settings="privacy">打开隐私与安全性</button></div>
+            <div class="setup-step"><span class="step-mark pending"><i data-lucide="circle-help"></i></span><strong>允许屏幕录制</strong><p>连接发送端时检查系统权限。</p><button class="text-action" data-settings="privacy">打开隐私与安全性</button></div>
             <div class="setup-step"><span class="step-mark pending"><i data-lucide="layout-panel-top"></i></span><strong>排列显示器</strong><p>将虚拟显示器放到合适的位置。</p><button class="text-action" data-settings="displays">打开显示器设置</button></div>
-            <div class="setup-step"><span class="step-mark"><i data-lucide="check"></i></span><strong>允许本地网络</strong><p>雷雳桥接网络可用于发现和连接。</p><button class="text-action" data-settings="network">打开网络设置</button></div>
+            <div class="setup-step"><span class="step-mark pending"><i data-lucide="circle-help"></i></span><strong>允许本地网络</strong><p>配置检查会读取当前雷雳网桥状态。</p><button class="text-action" data-settings="network">打开网络设置</button></div>
           </div>
         </div>
       </section>
 
       <section class="page" id="diagnostics">
         <div class="page-head"><div><h2>配置检查</h2><p>同时验证当前链路的协商能力和实际图传余量。</p></div><button class="button-primary heading-action" id="run-test"><i data-lucide="gauge"></i><span id="test-button-label">运行检测</span></button></div>
-        <div class="test-status" id="test-status"><i data-lucide="circle-check"></i><span>样例结果：当前链路满足 5K HEVC 图传。</span></div>
+        <div class="test-status" id="test-status"><i data-lucide="circle-help"></i><span>尚未检测。点击“运行检测”后才会连接并读取真实结果。</span></div>
         <div class="diagnostic-grid">
-          <div class="diagnostic-box"><span class="caption">协商链路</span><strong id="diag-link">Thunderbolt 4</strong><p id="diag-link-detail">40 Gbit/s · 双向 · 雷雳桥接</p></div>
-          <div class="diagnostic-box"><span class="caption">线材模式</span><strong id="diag-cable">被动线</strong><p>由 USB-C e-marker 与活动雷雳拓扑报告交叉验证。</p></div>
-          <div class="diagnostic-box"><span class="caption">可用图传吞吐</span><strong id="diag-throughput">17.4 Gbit/s</strong><p>两端实测 TCP 有效吞吐；不等同于线材额定带宽。</p></div>
-          <div class="diagnostic-box"><span class="caption">当前图传需求</span><strong>12.8 Gbit/s</strong><p>5K · HEVC · 58 fps · 音频中继开启</p></div>
+          <div class="diagnostic-box"><span class="caption">协商链路</span><strong id="diag-link">尚未检测</strong><p id="diag-link-detail">等待雷雳桥接网络状态</p></div>
+          <div class="diagnostic-box"><span class="caption">线材模式</span><strong id="diag-cable">尚未检测</strong><p>无法从系统读取时显示未知，不猜测线材规格。</p></div>
+          <div class="diagnostic-box"><span class="caption">可用图传吞吐</span><strong id="diag-throughput">—</strong><p>运行检测后显示本次握手结果；未进行吞吐测试时不填数值。</p></div>
+          <div class="diagnostic-box"><span class="caption">当前图传需求</span><strong id="diag-demand">—</strong><p id="diag-demand-detail">建立显示会话后显示实际屏幕参数。</p></div>
         </div>
-        <div class="quality-line"><div class="quality-meter" aria-label="链路余量 4/5"><i class="good"></i><i class="good"></i><i class="good"></i><i class="good"></i><i></i></div><b>图传余量充足</b></div>
+        <div class="quality-line"><div class="quality-meter" aria-label="尚未检测"><i></i><i></i><i></i><i></i><i></i></div><b>尚未检测</b></div>
         <div class="section"><h3>结果边界</h3><button class="disclosure" id="toggle-method">查看此检测能证明什么</button><div class="method-note" id="method-note">“Thunderbolt 4”和“被动线”来自 macOS IOKit 可用的 e-marker 与雷雳拓扑信息，缺失时必须显示“无法识别”，不能猜测。吞吐测试只评价这一次两端设备、端口、转接链和线材构成的实际链路；它可以支持“满足当前图传”的结论，不能证明线材没有物理缺陷。</div></div>
       </section>
 
@@ -466,10 +477,10 @@
   </div>
 
   <div class="modal-wrap" id="add-modal" role="dialog" aria-modal="true" aria-labelledby="add-title">
-    <div class="modal"><header><h2 id="add-title">添加设备</h2><p>连接一次后，地址和配对凭据将被安全保存。</p></header><div class="modal-body"><label for="device-name">设备名称</label><input id="device-name" autocomplete="off" placeholder="例如：书房 iMac"><label for="device-ip">雷雳桥接地址</label><input id="device-ip" class="code" autocomplete="off" placeholder="169.254.x.x"><label for="device-code">配对码</label><input id="device-code" autocomplete="off" placeholder="仅用于模拟保存到钥匙串"></div><footer><button class="button-secondary" id="modal-cancel">取消</button><button class="button-primary" id="modal-save">保存设备</button></footer></div>
+    <div class="modal"><header><h2 id="add-title">添加设备</h2><p>填写接收端显示的雷雳地址和 6 位配对码。</p></header><div class="modal-body"><label for="device-name">设备名称</label><input id="device-name" autocomplete="off" placeholder="例如：书房 iMac"><label for="device-ip">雷雳桥接地址</label><input id="device-ip" class="code" autocomplete="off" placeholder="10.10.10.3"><label for="device-code">配对码</label><input id="device-code" class="code" autocomplete="off" inputmode="numeric" maxlength="6" placeholder="接收端显示的 6 位数字"></div><footer><button class="button-secondary" id="modal-cancel">取消</button><button class="button-primary" id="modal-save">保存设备</button></footer></div>
   </div>
   <div class="modal-wrap" id="version-modal" role="dialog" aria-modal="true" aria-labelledby="version-title">
-    <div class="modal"><header><h2 id="version-title">版本兼容性</h2><p id="version-subtitle">连接前会比较通信协议级别。</p></header><div class="compatibility-result" id="compatibility-result"><i data-lucide="shield-check"></i><span>协议兼容，可以连接。</span></div><div class="version-grid"><div class="version-row"><span id="modal-local-build-label">本机安装版本</span><b>3.5.2</b></div><div class="version-row"><span id="modal-local-protocol-label">本机协议级别</span><b>3.5</b></div><div class="version-row"><span id="modal-receiver-build-label">对端安装版本</span><b id="modal-receiver-build">3.5.2</b></div><div class="version-row"><span id="modal-receiver-protocol-label">对端协议级别</span><b id="modal-receiver-protocol">3.5</b></div></div><footer><button class="button-secondary" id="version-refresh"><i data-lucide="rotate-cw"></i>重新发现</button><button class="button-primary" id="version-close">完成</button></footer></div>
+    <div class="modal"><header><h2 id="version-title">版本兼容性</h2><p id="version-subtitle">连接前会比较通信协议级别。</p></header><div class="compatibility-result" id="compatibility-result"><i data-lucide="shield-check"></i><span>协议兼容，可以连接。</span></div><div class="version-grid"><div class="version-row"><span id="modal-local-build-label">本机安装版本</span><b id="modal-local-build">待读取</b></div><div class="version-row"><span id="modal-local-protocol-label">本机协议级别</span><b id="modal-local-protocol">待读取</b></div><div class="version-row"><span id="modal-receiver-build-label">对端安装版本</span><b id="modal-receiver-build">尚未发现</b></div><div class="version-row"><span id="modal-receiver-protocol-label">对端协议级别</span><b id="modal-receiver-protocol">待握手验证</b></div></div><footer><button class="button-secondary" id="version-refresh"><i data-lucide="rotate-cw"></i>重新发现</button><button class="button-primary" id="version-close">完成</button></footer></div>
   </div>
   <div class="modal-wrap" id="role-modal" role="dialog" aria-modal="true" aria-labelledby="role-title">
     <div class="modal"><header><h2 id="role-title">切换本机角色？</h2><p id="role-copy">切换角色会停止当前显示会话。</p></header><footer><button class="button-secondary" id="role-cancel">取消</button><button class="button-primary" id="role-confirm">切换角色</button></footer></div>
@@ -480,10 +491,13 @@
   <div class="toast" id="toast"><i data-lucide="circle-check"></i><span id="toast-text"></span></div>
 
   <script>
-    const initialDevices = [
-      { id: 'imac', name: '卓尔的 iMac', model: 'iMac (Retina 5K, 27-inch, 2020)', systemVersion: 'macOS 15.3.2', ip: '169.254.44.2', icon: 'monitor-up', state: 'online', profile: '5K 扩展显示', last: '刚刚', detail: 'Thunderbolt Bridge · 169.254.44.2 · 配对凭据已保存', receiverVersion: '3.5.2', protocolVersion: '3.5' },
-      { id: 'studio', name: '工作室 Mac Studio', model: 'Mac Studio (M2 Max, 2023)', systemVersion: 'macOS 14.6.1', ip: '169.254.44.3', icon: 'monitor', state: 'away', profile: '低延迟镜像', last: '昨天', detail: '上次使用：Thunderbolt Bridge · 配对凭据已保存', receiverVersion: '3.4.8', protocolVersion: '3.4' }
-    ];
+    const initialDevices = [];
+    if (localStorage.getItem('tb-mvp-data-version') !== '2') {
+      localStorage.removeItem('tb-mvp-devices');
+      localStorage.removeItem('tb-mvp-selected');
+      localStorage.removeItem('tb-mvp-connected');
+      localStorage.setItem('tb-mvp-data-version', '2');
+    }
     const storedDevices = JSON.parse(localStorage.getItem('tb-mvp-devices') || 'null');
     let devices = (storedDevices || initialDevices).map((device) => ({
       ...device,
@@ -492,12 +506,11 @@
       model: device.model === undefined ? (device.id === 'imac' ? 'iMac (Retina 5K, 27-inch, 2020)' : device.id === 'studio' ? 'Mac Studio (M2 Max, 2023)' : null) : device.model,
       systemVersion: device.systemVersion === undefined ? (device.id === 'imac' ? 'macOS 15.3.2' : device.id === 'studio' ? 'macOS 14.6.1' : null) : device.systemVersion
     }));
-    const senderVersion = '3.5.2';
-    const senderProtocol = '3.5';
-    let connectedId = 'imac';
-    let selectedId = devices.some((device) => device.id === connectedId)
-      ? connectedId
-      : (localStorage.getItem('tb-mvp-selected') || devices[0].id);
+    let senderVersion = '待读取';
+    let senderProtocol = '待读取';
+    let connectedId = null;
+    let selectedId = devices.some((device) => device.id === localStorage.getItem('tb-mvp-selected'))
+      ? localStorage.getItem('tb-mvp-selected') : null;
     let localRole = localStorage.getItem('tb-mvp-local-role') || 'host';
     let outputMode = localStorage.getItem('tb-mvp-output-mode') || 'extend';
     let audioRelay = localStorage.getItem('tb-mvp-audio-relay') !== 'false';
@@ -506,7 +519,7 @@
     let toastTimer;
 
     const $ = (selector) => document.querySelector(selector);
-    function selected() { return devices.find((device) => device.id === selectedId) || devices[0]; }
+    function selected() { return devices.find((device) => device.id === selectedId) || { id: null, name: '尚未添加设备', detail: '点击“添加设备”录入对端雷雳桥接地址和配对码', profile: '等待设备配置', icon: 'monitor-up' }; }
     function iconFor(device) { return `<i data-lucide="${device.icon}"></i>`; }
     function statusText(device) { return device.id === connectedId ? '正在连接' : device.state === 'online' ? '可连接' : '等待设备插入'; }
     function compatibilityFor(device) {
@@ -519,17 +532,18 @@
     function updateIcons() { if (window.lucide) lucide.createIcons(); }
     function persist() {
       localStorage.setItem('tb-mvp-devices', JSON.stringify(devices));
-      localStorage.setItem('tb-mvp-selected', selectedId);
+      if (selectedId) localStorage.setItem('tb-mvp-selected', selectedId); else localStorage.removeItem('tb-mvp-selected');
       localStorage.setItem('tb-mvp-local-role', localRole);
       localStorage.setItem('tb-mvp-output-mode', outputMode);
       localStorage.setItem('tb-mvp-audio-relay', String(audioRelay));
       localStorage.setItem('tb-mvp-prevent-sleep', String(preventSleep));
+      localStorage.setItem('tb-mvp-data-version', '2');
     }
     function showToast(message) { $('#toast-text').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2800); }
 
     function renderDevices() {
       const side = $('#saved-devices');
-      side.innerHTML = devices.map((device) => `<button class="device-side-item ${device.id === selectedId ? 'active' : ''}" data-device="${device.id}">${iconFor(device)}<span class="device-label"><span class="device-name">${device.name}</span><small>${device.model || '型号待发现'} · ${device.systemVersion || '系统版本待发现'}</small></span><i class="sidebar-status ${device.id === connectedId || device.state === 'online' ? 'online' : 'away'}"></i></button>`).join('');
+      side.innerHTML = devices.length ? devices.map((device) => `<button class="device-side-item ${device.id === selectedId ? 'active' : ''}" data-device="${device.id}">${iconFor(device)}<span class="device-label"><span class="device-name">${device.name}</span><small>${device.model || '型号待发现'} · ${device.systemVersion || '系统版本待发现'}</small></span><i class="sidebar-status ${device.id === connectedId || device.state === 'online' ? 'online' : 'away'}"></i></button>`).join('') : '<div class="empty-state">尚未添加设备</div>';
       document.querySelectorAll('[data-device]').forEach((element) => element.addEventListener('click', () => selectDevice(element.dataset.device, true)));
       renderDetail(); updateIcons();
     }
@@ -557,6 +571,10 @@
       $('#audio-relay').setAttribute('aria-pressed', String(audioRelay));
       $('#prevent-sleep').classList.toggle('on', preventSleep);
       $('#prevent-sleep').setAttribute('aria-pressed', String(preventSleep));
+      $('#pairing-banner').hidden = isHost;
+      const pairing = window.__thunderPairing || {};
+      $('#pairing-address').textContent = pairing.address || '等待雷雳网桥';
+      $('#pairing-code').textContent = pairing.code || '切换为显示器后生成';
       $('#sidebar-local-version').textContent = `本机（${localRoleName}）v${senderVersion}`;
       $('#sidebar-receiver-version').textContent = `${device.name}（${remoteRoleName}）v${device.receiverVersion || '待发现'}`;
       $('#modal-local-build-label').textContent = `本机（${localRoleName}）安装版本`;
@@ -566,9 +584,10 @@
     }
     function renderDetail() {
       const device = selected();
-      const isLive = device.id === connectedId;
+      const isLive = !!device.id && device.id === connectedId;
       const compatibility = compatibilityFor(device);
       const isHost = localRole === 'host';
+      const listening = window.__thunderListening === true && !isHost;
       $('#hero-device-name').textContent = device.name;
       $('#hero-device-detail').textContent = device.detail;
       $('#identity-name').textContent = device.name || '名称待发现';
@@ -576,26 +595,26 @@
       $('#identity-system').textContent = device.systemVersion || '系统版本待发现';
       $('#connection-pill').innerHTML = isLive
         ? `<i></i><span>${isHost ? '正在扩展' : '正在接收'}</span>`
+        : listening ? '<i style="background: var(--orange)"></i><span>监听中</span>'
         : '<i style="background: var(--secondary)"></i><span>未连接</span>';
       $('#connect-label').textContent = isLive
         ? (isHost ? '停止扩展' : '停止接收')
+        : listening ? '断开监听'
         : (isHost ? `${outputMode === 'extend' ? '扩展到' : '镜像到'} ${device.name}` : `作为显示器连接`);
       $('#toolbar-title').textContent = `${isHost ? '主机' : '显示器'} · ${device.name}`;
-      $('#toolbar-connect').disabled = compatibility === 'incompatible';
+      $('#toolbar-connect').disabled = isHost && (!device.ip || !device.pairingCode || compatibility === 'incompatible');
       $('#toolbar-connect').title = compatibility === 'incompatible' ? '接收端协议不兼容，需要更新' : '';
-      $('#metric-throughput').textContent = isLive ? '12.8' : '—';
-      $('#metric-fps').textContent = isLive ? '58' : '—';
-      $('#metric-latency').textContent = isLive ? '3' : '—';
-      $('#metric-codec').textContent = isLive ? 'HEVC' : '—';
-      $('#graph-value').textContent = isLive ? '12.8 Gbit/s' : '等待连接';
-      $('#graph-line').setAttribute('d', isLive ? 'M0 22 L35 19 L70 20 L105 14 L140 17 L175 12 L210 16 L245 11 L280 15 L315 8 L350 13 L385 10 L420 16 L455 11 L490 14 L525 7 L560 10 L600 8' : 'M0 28 L600 28');
-      $('#graph-line').setAttribute('stroke', isLive ? '#34c759' : '#d2d2d7');
+      $('#metric-throughput').textContent = '—'; $('#metric-fps').textContent = '—'; $('#metric-latency').textContent = '—'; $('#metric-codec').textContent = isLive ? 'HEVC' : '—';
+      $('#graph-value').textContent = isLive ? '已连接，等待统计' : '等待连接';
+      $('#graph-line').setAttribute('d', 'M0 28 L600 28'); $('#graph-line').setAttribute('stroke', '#d2d2d7');
       document.querySelector('.stream-summary').innerHTML = isLive
         ? (isHost
-          ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>5120 × 2880 · 音频中继${audioRelay ? '开启' : '关闭'}`
+          ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>实际参数将在首帧后显示 · 音频中继未实现`
           : `<b>正在接收 ${device.name} 的画面</b><br>作为显示器 · 防止息屏${preventSleep ? '开启' : '关闭'}`)
-        : (isHost
-          ? `<b>等待 ${device.name}</b><br>连接后将恢复 ${device.profile}`
+        : (listening
+          ? `<b>监听中 · TCP 54321</b><br>等待主机输入地址和配对码`
+          : isHost
+          ? `<b>等待 ${device.name}</b><br>${device.ip ? '填写配对码后开始连接' : '先添加对端设备'}`
           : `<b>等待 ${device.name} 开始投送</b><br>作为显示器 · 防止息屏${preventSleep ? '开启' : '关闭'}`);
       renderRoleControls();
       updateVersionUI(device, compatibility);
@@ -629,6 +648,7 @@
     }
     function connectSelected() {
       const device = selected();
+      if (!device.id) { showToast('请先添加对端设备'); return; }
       if (compatibilityFor(device) === 'incompatible') { openVersionModal(); return; }
       if (connectedId === device.id) {
         connectedId = null;
@@ -680,25 +700,16 @@
       if (devices.length === 1) { closeModal('forget-modal'); showToast('至少保留一个设备记录'); return; }
       devices = devices.filter((item) => item.id !== device.id);
       if (connectedId === device.id) connectedId = null;
-      selectedId = connectedId || devices[0].id;
+      selectedId = connectedId || devices[0]?.id || null;
       persist(); closeModal('forget-modal'); renderDevices(); showToast(`已忘记 ${device.name} 及其本地配对凭据`);
     }
     function runTest() {
       const button = $('#run-test'); const label = $('#test-button-label');
-      button.disabled = true; label.textContent = '正在检测'; $('#test-status').innerHTML = '<i class="spin" data-lucide="loader-circle"></i><span>正在演示链路吞吐与协商能力的检测状态…</span>'; updateIcons();
-      setTimeout(() => {
-        const speed = (16.8 + Math.random() * 1.6).toFixed(1);
-        $('#diag-throughput').textContent = `${speed} Gbit/s`;
-        $('#test-status').innerHTML = '<i data-lucide="circle-check"></i><span>样例检测完成：当前链路满足 5K HEVC 图传。</span>';
-        label.textContent = '重新检测'; button.disabled = false; updateIcons(); showToast('雷雳链路检测已完成');
-      }, 1400);
+      button.disabled = true; label.textContent = '正在检测'; $('#test-status').innerHTML = '<i class="spin" data-lucide="loader-circle"></i><span>正在读取真实雷雳路径并验证配对。</span>'; updateIcons();
     }
     function tickMetrics() {
       if (!connectedId || selected().id !== connectedId) return;
-      const throughput = (12.1 + Math.random() * 1.5).toFixed(1); const fps = 57 + Math.round(Math.random() * 2);
-      $('#metric-throughput').textContent = throughput; $('#metric-fps').textContent = fps; $('#graph-value').textContent = `${throughput} Gbit/s`;
-      const points = Array.from({length: 18}, (_, index) => `${index ? 'L' : 'M'}${Math.round(index * 35.3)} ${7 + Math.round(Math.random() * 15)}`).join(' ');
-      $('#graph-line').setAttribute('d', points);
+      return;
     }
 
     document.querySelectorAll('.nav-item[data-page]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
@@ -770,7 +781,7 @@
       if (!name || !isIPv4) { showToast('请填写设备名称和有效的 IPv4 地址'); return; }
       const id = `device-${Date.now()}`;
       const hasPairingCode = $('#device-code').value.trim().length > 0;
-      devices.push({ id, name, model: null, systemVersion: null, ip, icon: 'laptop', state: 'away', profile: '5K 扩展显示', last: '尚未连接', detail: `雷雳桥接 · ${ip} · ${hasPairingCode ? '配对凭据已保存' : '首次连接时将配对'}`, receiverVersion: null, protocolVersion: null });
+      devices.push({ id, name, model: null, systemVersion: null, ip, pairingCode: $('#device-code').value.trim(), icon: 'laptop', state: 'away', profile: '等待实际握手', last: '尚未连接', detail: `雷雳桥接 · ${ip} · ${hasPairingCode ? '配对码已保存' : '缺少配对码'}`, receiverVersion: null, protocolVersion: null });
       selectedId = id; persist(); showPage('current-device'); renderDevices(); $('#add-modal').classList.remove('show'); $('#device-name').value = ''; $('#device-ip').value = ''; $('#device-code').value = ''; showToast(`${name} 已保存，配对码将仅存于钥匙串`);
     });
     document.querySelectorAll('.modal-wrap').forEach((modal) => modal.addEventListener('click', (event) => {

@@ -79,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
         discovery.start()
         tick()
+        if UserDefaults.standard.bool(forKey: "displayRole") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.receive() }
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -229,9 +232,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         stopButton = NSButton()
         quality.selectedSegment = UserDefaults.standard.integer(forKey: "quality")
         addressField.stringValue = UserDefaults.standard.string(forKey: "receiverAddress") ?? ""
+        if !addressField.stringValue.isEmpty {
+            codeField.stringValue = UserDefaults.standard.string(forKey: "pairingCode.\(addressField.stringValue)") ?? ""
+        }
 
         let controller = WKUserContentController()
         controller.add(self, name: "thunderDisplay")
+        controller.addUserScript(WKUserScript(source: "if (localStorage.getItem('tb-mvp-data-version') !== '2') { localStorage.removeItem('tb-mvp-devices'); localStorage.removeItem('tb-mvp-selected'); localStorage.removeItem('tb-mvp-connected'); localStorage.setItem('tb-mvp-data-version', '2'); }", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(source: nativeBridgeScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
@@ -243,6 +250,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             fatalError("Missing approved MVP prototype")
         }
         web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self else { return }
+            self.prototypeVersion()
+            self.prototypeDiagnostics(CableAddress.current())
+            if self.listener != nil {
+                self.prototypeListening(true)
+                self.prototypePairing(address: CableAddress.current()?.ip, code: self.code)
+            }
+        }
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -265,7 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if (button.id === 'toolbar-connect') {
               event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
-              post('session', { role: role(), output: output(), address: device.ip || '' });
+              post('session', { role: role(), output: output(), address: device.ip || '', code: device.pairingCode || '' });
             } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
               event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
@@ -273,10 +289,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             } else if (button.id === 'refresh') {
               event.preventDefault(); event.stopImmediatePropagation(); post('refresh');
             } else if (button.id === 'modal-save') {
-              setTimeout(() => post('device', {
+              const device = {
+                name: document.getElementById('device-name')?.value || '',
                 address: document.getElementById('device-ip')?.value || '',
                 code: document.getElementById('device-code')?.value || ''
-              }), 0);
+              };
+              setTimeout(() => post('device', device), 0);
+            } else if (button.matches('[data-local-role]')) {
+              setTimeout(() => {
+                if (!document.querySelector('#role-modal.show')) post('role', { role: button.dataset.localRole });
+              }, 0);
             } else if (button.id === 'role-confirm') {
               setTimeout(() => post('role', { role: role() }), 0);
             } else if (button.id === 'prevent-sleep') {
@@ -294,6 +316,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             },
             toast(message) {
               if (typeof showToast === 'function') showToast(message);
+            },
+            pairing(address, code) {
+              window.__thunderPairing = { address, code };
+              const banner = document.getElementById('pairing-banner');
+              if (banner) banner.hidden = !address || !code;
+              const addressLabel = document.getElementById('pairing-address');
+              const codeLabel = document.getElementById('pairing-code');
+              if (addressLabel) addressLabel.textContent = address || '等待雷雳网桥';
+              if (codeLabel) codeLabel.textContent = code || '切换为显示器后生成';
+              renderDetail();
+            },
+            listening(active) {
+              window.__thunderListening = active;
+              renderDetail();
+            },
+            connection(live, roleName, message) {
+              const device = selected();
+              if (live && device.id) { connectedId = device.id; device.state = 'online'; device.last = '刚刚'; }
+              else connectedId = null;
+              renderDevices();
+              if (message) showToast(message);
+            },
+            diagnostics(ip, ready, host, os) {
+              const link = document.getElementById('diag-link');
+              const detail = document.getElementById('diag-link-detail');
+              const cable = document.getElementById('diag-cable');
+              if (link) link.textContent = ready ? 'Thunderbolt Bridge' : '未就绪';
+              if (detail) detail.textContent = ready ? `${ip} · ${host}` : '请连接雷雳线并配置雷雳网桥';
+              if (cable) cable.textContent = ready ? '已连接' : '未检测';
+            },
+            version(version, protocol) {
+              senderVersion = version;
+              senderProtocol = protocol;
+              window.__thunderDisplayVersion = { version, protocol };
+              const local = document.getElementById('sidebar-local-version');
+              if (local) local.textContent = `本机 v${version}`;
+              const build = document.getElementById('modal-local-build');
+              const protocolValue = document.getElementById('modal-local-protocol');
+              if (build) build.textContent = version;
+              if (protocolValue) protocolValue.textContent = protocol;
+              renderDetail();
+            },
+            testResult(ok, width, height, hevc, message) {
+              const status = document.getElementById('test-status');
+              const button = document.getElementById('run-test');
+              const label = document.getElementById('test-button-label');
+              const demand = document.getElementById('diag-demand');
+              const detail = document.getElementById('diag-demand-detail');
+              if (status) status.innerHTML = `<i data-lucide="${ok ? 'circle-check' : 'circle-x'}"></i><span>${message}</span>`;
+              if (button) button.disabled = false;
+              if (label) label.textContent = '重新检测';
+              if (demand && ok) demand.textContent = `${width} × ${height}`;
+              if (detail && ok) detail.textContent = `${hevc ? 'HEVC' : 'H.264'} · 屏幕参数握手通过`;
+              updateIcons();
             }
           };
         })();
@@ -314,16 +390,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             addressField.stringValue = address
             codeField.stringValue = code
             UserDefaults.standard.set(address, forKey: "receiverAddress")
+            UserDefaults.standard.set(code, forKey: "pairingCode.\(address)")
             prototypeToast(code.isEmpty ? "设备已保存；连接前需要配对码" : "设备与配对码已准备")
         case "session":
-            if peer != nil || listener != nil || connecting { endSession("已断开，可以开始新的连接。"); return }
             let address = body["address"] as? String ?? ""
+            let pairingCode = body["code"] as? String ?? ""
             if !address.isEmpty { addressField.stringValue = address }
+            if !pairingCode.isEmpty { codeField.stringValue = pairingCode; UserDefaults.standard.set(pairingCode, forKey: "pairingCode.\(address)") }
+            if body["role"] as? String == "display" {
+                if listener != nil || peer != nil { prototypeToast("接收端已在监听，等待主机输入地址和配对码"); return }
+                receive()
+                return
+            }
+            if peer != nil || connecting { endSession("已断开，可以开始新的连接。"); return }
             if body["output"] as? String == "mirror" {
                 prototypeToast("镜像模式尚未实现；请选择“扩展”")
                 return
             }
-            if body["role"] as? String == "display" { receive() } else { startConnection(probe: false) }
+            if address.isEmpty || codeField.stringValue.isEmpty { prototypeToast("请先添加接收端地址和配对码"); return }
+            startConnection(probe: false)
         case "test":
             let address = body["address"] as? String ?? ""
             if !address.isEmpty { addressField.stringValue = address }
@@ -335,6 +420,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             let display = body["role"] as? String == "display"
             if peer != nil || listener != nil || connecting { endSession("正在切换本机角色…") }
             UserDefaults.standard.set(display, forKey: "displayRole")
+            if display && listener == nil && peer == nil { receive() }
+            if !display { prototypePairing(address: nil, code: nil) }
         case "preventSleep":
             UserDefaults.standard.set(body["enabled"] as? Bool ?? false, forKey: "preventDisplaySleep")
             updateSleepActivity()
@@ -348,6 +435,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     private func prototypeStatus(_ message: String, active: Bool) {
         webView?.evaluateJavaScript("window.ThunderDisplayNative?.status(\(javaScriptString(message)), \(active));", completionHandler: nil)
+    }
+
+    private func prototypePairing(address: String?, code: String?) {
+        let addressValue = address ?? ""
+        let codeValue = code ?? ""
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.pairing(\(javaScriptString(addressValue)), \(javaScriptString(codeValue)));", completionHandler: nil)
+    }
+
+    private func prototypeListening(_ active: Bool) {
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.listening(\(active ? "true" : "false"));", completionHandler: nil)
+    }
+
+    private func prototypeConnection(_ live: Bool, message: String? = nil) {
+        let messageValue = message.map(javaScriptString) ?? "null"
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.connection(\(live ? "true" : "false"), \(UserDefaults.standard.bool(forKey: "displayRole") ? "'display'" : "'host'"), \(messageValue));", completionHandler: nil)
+    }
+
+    private func prototypeDiagnostics(_ cable: CableAddress?) {
+        let address = cable?.ip ?? ""
+        let ready = cable != nil ? "true" : "false"
+        let host = ProcessInfo.processInfo.hostName
+        let script = "window.ThunderDisplayNative?.diagnostics(\(javaScriptString(address)), \(ready), \(javaScriptString(host)), \(javaScriptString(ProcessInfo.processInfo.operatingSystemVersionString)));"
+        webView?.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    private func prototypeVersion() {
+        let script = "window.ThunderDisplayNative?.version(\(javaScriptString(Wire.appVersion)), \(javaScriptString(String(Wire.protocolVersion))));"
+        webView?.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    private func prototypeTestResult(_ ok: Bool, profile: DisplayProfile?, message: String) {
+        let width = profile?.logicalWidth ?? 0
+        let height = profile?.logicalHeight ?? 0
+        let hevc = profile?.hevc == true ? "true" : "false"
+        let script = "window.ThunderDisplayNative?.testResult(\(ok ? "true" : "false"), \(width), \(height), \(hevc), \(javaScriptString(message)));"
+        webView?.evaluateJavaScript(script, completionHandler: nil)
     }
 
     private func javaScriptString(_ value: String) -> String {
@@ -583,7 +706,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 }
             }
             listener.start()
+            prototypeListening(true)
             pairingLabel.stringValue = "地址 \(cable.ip)    配对码 \(code)"
+            prototypePairing(address: cable.ip, code: code)
             record("正在启动接收端 · \(cable.description)")
             setBusy(true)
         } catch { statusLabel.stringValue = error.localizedDescription }
@@ -655,6 +780,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                         }
                         self.surface.onFirstImage = { [weak self] in self?.showVideo() }
                         self.record("配对通过 · 发射端 \(hello.appVersion ?? "未知") · 等待视频配置")
+                        self.prototypeConnection(true, message: "已配对，等待视频")
                         return true
                     }
                     guard promoted else { accepted.stop(); return }
@@ -739,11 +865,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     @objc private func testConnection() { startConnection(probe: true) }
 
     private func startConnection(probe: Bool) {
-        guard #available(macOS 14.0, *) else { statusLabel.stringValue = "发送扩展屏需要 macOS 14 或更新。"; return }
-        guard let cable = CableAddress.current() else { statusLabel.stringValue = "请连接雷雳线，并等待雷雳网桥获得地址。"; return }
+        guard #available(macOS 14.0, *) else { if probe { prototypeTestResult(false, profile: nil, message: "当前 macOS 不支持发送端虚拟显示器。") }; statusLabel.stringValue = "发送扩展屏需要 macOS 14 或更新。"; return }
+        guard let cable = CableAddress.current() else { if probe { prototypeTestResult(false, profile: nil, message: "未发现雷雳网桥，请先连接雷雳线并配置网络。") }; statusLabel.stringValue = "请连接雷雳线，并等待雷雳网桥获得地址。"; return }
         let ip = addressField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let code = codeField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { statusLabel.stringValue = "请输入接收端显示的 6 位配对码。"; return }
+        guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { if probe { prototypeTestResult(false, profile: nil, message: "缺少接收端 6 位配对码，无法开始检测。") }; statusLabel.stringValue = "请输入接收端显示的 6 位配对码。"; return }
         UserDefaults.standard.set(ip, forKey: "receiverAddress")
         UserDefaults.standard.set(quality.selectedSegment, forKey: "quality")
         sessionID = UUID()
@@ -781,7 +907,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 let mode = "\(profile.logicalWidth) × \(profile.logicalHeight)"
                                 let backing = profile.hiDPI ? " · Retina 视频 \(profile.width) × \(profile.height)" : ""
                                 self.record("配对通过 · 显示模式 \(mode)\(backing) · 接收端 \(profile.appVersion ?? "未知")")
-                                if probe { self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return }
+                                if probe {
+                                    self.prototypeTestResult(true, profile: profile, message: "检测成功：雷雳 TCP、配对码和屏幕参数交换均已通过。")
+                                    self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return
+                                }
+                                self.prototypeConnection(true, message: "已连接，正在启动桌面采集")
                                 guard CGPreflightScreenCaptureAccess() else {
                                     CGRequestScreenCaptureAccess()
                                     self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
@@ -844,6 +974,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                             let detail = self.transportReady && !probeCompleted && self.sender == nil
                                 ? "TCP 已连接，接收端未完成屏幕参数交换：\(message)。旧版接收端可能因版本或配对码不符而直接断开；请更新两台 Mac。"
                                 : message
+                            if probe { self.prototypeTestResult(false, profile: nil, message: detail) }
                             self.endSession(detail)
                         }
                     }
@@ -867,6 +998,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             } catch {
                 DispatchQueue.main.async {
                     guard let self, self.sessionID == generation else { return }
+                    if probe { self.prototypeTestResult(false, profile: nil, message: error.localizedDescription) }
                     self.endSession(error.localizedDescription)
                 }
             }
@@ -894,8 +1026,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     private func tick() {
         let cable = CableAddress.current()
+        prototypeVersion()
         cableLabel.stringValue = cable.map { "雷雳网桥  \($0.ip) · \($0.name)" } ?? "雷雳网桥  未就绪"
         diagnosticCableLabel.stringValue = CableAddress.current().map { "雷雳网桥  \($0.ip) · \($0.name) · 已就绪" } ?? "雷雳网桥未就绪"
+        prototypeDiagnostics(cable)
         let now = DispatchTime.now().uptimeNanoseconds
         if let peer {
             receiveLock.lock(); let receiver = receiveSession; let last = receiver?.lastSeen; receiveLock.unlock()
@@ -931,6 +1065,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         surface.reset()
         surface.onSubmit = nil; surface.onFirstImage = nil
         pairingLabel.stringValue = ""
+        prototypeConnection(false)
+        prototypeListening(false)
+        if listener == nil { prototypePairing(address: nil, code: nil) }
         metricsLabel.stringValue = ""
         record(message)
         setBusy(true)
