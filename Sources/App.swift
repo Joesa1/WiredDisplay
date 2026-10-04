@@ -1,6 +1,7 @@
 import AppKit
 import Network
 import VideoToolbox
+import WebKit
 
 private final class ReceiveSession {
     let decoder = HardwareDecoder()
@@ -10,7 +11,7 @@ private final class ReceiveSession {
     var lastSeen = DispatchTime.now().uptimeNanoseconds
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler {
     private enum Page: CaseIterable { case connection, diagnostics, settings }
 
     private var window: NSWindow!
@@ -59,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var contentStack: NSStackView!
     private var toolbarTitle: NSTextField!
     private var sleepActivity: NSObjectProtocol?
+    private var webView: WKWebView?
     private let roleLabel = NSTextField(labelWithString: "本机作为主机")
     private let connectionStateLabel = NSTextField(labelWithString: "未连接")
     private let diagnosticCableLabel = NSTextField(labelWithString: "正在检查雷雳网桥…")
@@ -85,9 +87,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let item = NSMenuItem()
         menu.addItem(item)
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "关于 WiredDisplay", action: #selector(about), keyEquivalent: "")
+        appMenu.addItem(withTitle: "关于 Thunder Display", action: #selector(about), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "退出 WiredDisplay", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "退出 Thunder Display", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.submenu = appMenu
         let edit = NSMenuItem()
         let editMenu = NSMenu(title: "编辑")
@@ -100,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func buildWindow() {
+        buildPrototypeWindow()
+    }
+
+    private func legacyBuildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Thunder Display"
@@ -204,6 +210,148 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         showPage(.connection)
         updateRoleUI()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func buildPrototypeWindow() {
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1160, height: 760),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Thunder Display"
+        window.delegate = self
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 760, height: 560)
+        window.center()
+
+        // These controls retain the existing session implementation without adding
+        // another connection path beside the approved prototype.
+        sendButton = NSButton()
+        testButton = NSButton()
+        receiveButton = NSButton()
+        stopButton = NSButton()
+        quality.selectedSegment = UserDefaults.standard.integer(forKey: "quality")
+        addressField.stringValue = UserDefaults.standard.string(forKey: "receiverAddress") ?? ""
+
+        let controller = WKUserContentController()
+        controller.add(self, name: "thunderDisplay")
+        controller.addUserScript(WKUserScript(source: nativeBridgeScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController = controller
+        let web = WKWebView(frame: .zero, configuration: configuration)
+        web.autoresizingMask = [.width, .height]
+        window.contentView = web
+        webView = web
+        guard let url = Bundle.main.url(forResource: "mvp-ui-prototype", withExtension: "html") else {
+            fatalError("Missing approved MVP prototype")
+        }
+        web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private var nativeBridgeScript: String {
+        """
+        (() => {
+          const post = (action, value = {}) => window.webkit?.messageHandlers?.thunderDisplay?.postMessage({ action, ...value });
+          const role = () => document.querySelector('[data-local-role].active')?.dataset.localRole || 'host';
+          const output = () => document.querySelector('[data-output-mode].active')?.dataset.outputMode || 'extend';
+          const selectedDevice = () => {
+            try {
+              const all = JSON.parse(localStorage.getItem('tb-mvp-devices') || '[]');
+              const id = localStorage.getItem('tb-mvp-selected');
+              return all.find((device) => device.id === id) || all[0] || {};
+            } catch (_) { return {}; }
+          };
+          document.addEventListener('click', (event) => {
+            const button = event.target.closest('button');
+            if (!button) return;
+            if (button.id === 'toolbar-connect') {
+              event.preventDefault(); event.stopImmediatePropagation();
+              const device = selectedDevice();
+              post('session', { role: role(), output: output(), address: device.ip || '' });
+            } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
+              event.preventDefault(); event.stopImmediatePropagation();
+              const device = selectedDevice();
+              post('test', { address: device.ip || '' });
+            } else if (button.id === 'refresh') {
+              event.preventDefault(); event.stopImmediatePropagation(); post('refresh');
+            } else if (button.id === 'modal-save') {
+              setTimeout(() => post('device', {
+                address: document.getElementById('device-ip')?.value || '',
+                code: document.getElementById('device-code')?.value || ''
+              }), 0);
+            } else if (button.id === 'role-confirm') {
+              setTimeout(() => post('role', { role: role() }), 0);
+            } else if (button.id === 'prevent-sleep') {
+              setTimeout(() => post('preventSleep', { enabled: button.classList.contains('on') }), 0);
+            }
+          }, true);
+          window.ThunderDisplayNative = {
+            status(message, active) {
+              const pill = document.getElementById('connection-pill');
+              if (pill) pill.innerHTML = `<i style="background:${active ? 'var(--green)' : 'var(--secondary)'}"></i><span>${message}</span>`;
+              const summary = document.querySelector('.stream-summary');
+              if (summary) summary.innerHTML = `<b>${message}</b><br>仅雷雳有线`;
+              const label = document.getElementById('connect-label');
+              if (label) label.textContent = active ? '断开' : '连接';
+            },
+            toast(message) {
+              if (typeof showToast === 'function') showToast(message);
+            }
+          };
+        })();
+        """
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "thunderDisplay", let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        DispatchQueue.main.async { [weak self] in self?.handlePrototypeAction(action, body: body) }
+    }
+
+    private func handlePrototypeAction(_ action: String, body: [String: Any]) {
+        switch action {
+        case "device":
+            let address = (body["address"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let code = (body["code"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard IPv4Address(address) != nil else { prototypeToast("请输入有效的雷雳 IPv4 地址"); return }
+            addressField.stringValue = address
+            codeField.stringValue = code
+            UserDefaults.standard.set(address, forKey: "receiverAddress")
+            prototypeToast(code.isEmpty ? "设备已保存；连接前需要配对码" : "设备与配对码已准备")
+        case "session":
+            if peer != nil || listener != nil || connecting { endSession("已断开，可以开始新的连接。"); return }
+            let address = body["address"] as? String ?? ""
+            if !address.isEmpty { addressField.stringValue = address }
+            if body["output"] as? String == "mirror" {
+                prototypeToast("镜像模式尚未实现；请选择“扩展”")
+                return
+            }
+            if body["role"] as? String == "display" { receive() } else { startConnection(probe: false) }
+        case "test":
+            let address = body["address"] as? String ?? ""
+            if !address.isEmpty { addressField.stringValue = address }
+            startConnection(probe: true)
+        case "refresh":
+            tick()
+            prototypeToast(CableAddress.current() == nil ? "未发现雷雳网桥" : "已刷新雷雳网桥")
+        case "role":
+            let display = body["role"] as? String == "display"
+            if peer != nil || listener != nil || connecting { endSession("正在切换本机角色…") }
+            UserDefaults.standard.set(display, forKey: "displayRole")
+        case "preventSleep":
+            UserDefaults.standard.set(body["enabled"] as? Bool ?? false, forKey: "preventDisplaySleep")
+            updateSleepActivity()
+        default: break
+        }
+    }
+
+    private func prototypeToast(_ message: String) {
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.toast(\(javaScriptString(message)));", completionHandler: nil)
+    }
+
+    private func prototypeStatus(_ message: String, active: Bool) {
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.status(\(javaScriptString(message)), \(active));", completionHandler: nil)
+    }
+
+    private func javaScriptString(_ value: String) -> String {
+        String(data: try! JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]), encoding: .utf8)!
     }
 
     private func sectionLabel(_ title: String) -> NSTextField {
@@ -326,15 +474,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func setBusy(_ busy: Bool) {
-        sendButton.isEnabled = !busy
-        testButton.isEnabled = !busy
-        receiveButton.isEnabled = !busy
+        sendButton?.isEnabled = !busy
+        testButton?.isEnabled = !busy
+        receiveButton?.isEnabled = !busy
         addressField.isEnabled = !busy
         codeField.isEnabled = !busy
         quality.isEnabled = !busy
-        stopButton.isEnabled = busy && !stopping
-        roleControl.isEnabled = !busy
-        mainActionButton.isEnabled = !busy
+        stopButton?.isEnabled = busy && !stopping
+        roleControl?.isEnabled = !busy
+        mainActionButton?.isEnabled = !busy
         updateRoleUI()
     }
 
@@ -573,7 +721,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard videoWindow == nil else { return }
         let screen = window.screen ?? NSScreen.main!
         let video = NSWindow(contentRect: screen.frame, styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false, screen: screen)
-        video.title = "WiredDisplay · Esc 返回"
+        video.title = "Thunder Display · Esc 返回"
         video.isReleasedWhenClosed = false
         video.collectionBehavior = [.fullScreenPrimary]
         video.delegate = self
@@ -604,7 +752,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         connecting = true
         setBusy(true)
         diagnosticLines.removeAll()
-        record("WiredDisplay \(Wire.appVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        record("Thunder Display \(Wire.appVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         record("本机 \(cable.description) → \(ip):\(Wire.port)")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
@@ -801,6 +949,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusLabel.stringValue = message
         connectionStateLabel.stringValue = message
         diagnosticStatusLabel.stringValue = message
+        prototypeStatus(message, active: peer != nil || listener != nil || connecting)
         NSLog("%@", message)
     }
     @objc private func copyDiagnostics() {
@@ -812,7 +961,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func about() {
         let alert = NSAlert()
-        alert.messageText = "WiredDisplay \(Wire.appVersion)"
+        alert.messageText = "Thunder Display \(Wire.appVersion)"
         alert.informativeText = "仅雷雳有线扩展屏。采用 macOS 原生采集、硬件编解码与原生画面显示。\n\n部分虚拟屏与消息封装思路来自 TargetBridge（MIT，Marco Caciotti）。独立实现，不与 Duet 私有协议互通。"
         alert.runModal()
     }

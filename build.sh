@@ -13,17 +13,18 @@ for architecture in arm64 x86_64; do
         -o "build/$architecture/WiredDisplay" \
         -framework AppKit -framework ScreenCaptureKit -framework VideoToolbox \
         -framework AVFoundation -framework CoreMedia -framework CoreVideo \
-        -framework SystemConfiguration -framework CoreGraphics -framework Network
-    app="$staging/WiredDisplay-$architecture.app"
+        -framework SystemConfiguration -framework CoreGraphics -framework Network -framework WebKit
+    app="$staging/Thunder Display.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp -X "build/$architecture/WiredDisplay" "$app/Contents/MacOS/WiredDisplay"
     cp -X Info.plist "$app/Contents/Info.plist"
     cp -X LICENSE-TargetBridge.txt "$app/Contents/Resources/"
+    cp -X Resources/mvp-ui-prototype.html "$app/Contents/Resources/"
     codesign --force --sign "${WIRED_SIGN_IDENTITY:--}" --identifier local.wired-display.app "$app"
     codesign --verify --deep --strict "$app"
-    ditto -c -k --sequesterRsrc --keepParent "$app" "dist/WiredDisplay-$architecture.zip"
-    rm -rf "dist/WiredDisplay-$architecture.app"
-    ditto --norsrc "$app" "dist/WiredDisplay-$architecture.app"
+    ditto -c -k --sequesterRsrc --keepParent "$app" "dist/ThunderDisplay-$architecture.zip"
+    rm -rf "dist/Thunder Display.app"
+    ditto --norsrc "$app" "dist/Thunder Display.app"
 done
-shasum -a 256 dist/*.zip > dist/SHA256SUMS.txt
+shasum -a 256 dist/ThunderDisplay-*.zip > dist/SHA256SUMS.txt
 echo "Built arm64 and x86_64 packages. Two-Mac validation is still required."

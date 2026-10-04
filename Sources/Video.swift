@@ -266,7 +266,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         try profile.validate()
         self.profile = profile
         let descriptor = CGVirtualDisplayDescriptor()
-        descriptor.name = "WiredDisplay"
+        descriptor.name = "Thunder Display"
         descriptor.vendorID = 0xEEEE
         descriptor.productID = 0x5744
         descriptor.serialNum = 1
