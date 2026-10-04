@@ -9,15 +9,15 @@ enum WireError: Error, LocalizedError {
 }
 
 enum PacketKind: UInt8 {
-    case hello = 1, profile, configuration, video, acknowledgment, cursor, heartbeat, end
+    case hello = 1, profile, configuration, video, acknowledgment, cursor, heartbeat, end, statistics, audioConfiguration, audio
 }
 
 // Length-prefix framing adapted from TargetBridge (MIT). Protocol is independent.
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 1
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.5.1"
+    static let protocolVersion = 2
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.1"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -47,17 +47,31 @@ enum Wire {
     }
 }
 
+struct PeerIdentity: Codable {
+    let id: String
+    let name: String
+    let model: String
+    let systemVersion: String
+}
+
 struct Hello: Codable {
     let version: Int
     let code: String
     let probe: Bool?
     let appVersion: String?
+    let identity: PeerIdentity?
+    let address: String?
+    let receiverCode: String?
 
-    init(version: Int, code: String, appVersion: String = Wire.appVersion, probe: Bool = false) {
+    init(version: Int, code: String, appVersion: String = Wire.appVersion, probe: Bool = false,
+         identity: PeerIdentity? = nil, address: String? = nil, receiverCode: String? = nil) {
         self.version = version
         self.probe = probe
         self.code = code
         self.appVersion = appVersion
+        self.identity = identity
+        self.address = address
+        self.receiverCode = receiverCode
     }
 }
 
@@ -67,6 +81,14 @@ struct DisplayProfile: Codable {
     let hiDPI: Bool
     let hevc: Bool
     let appVersion: String?
+    let identity: PeerIdentity?
+    let receiverCode: String?
+
+    init(width: Int, height: Int, hiDPI: Bool, hevc: Bool, appVersion: String?,
+         identity: PeerIdentity? = nil, receiverCode: String? = nil) {
+        self.width = width; self.height = height; self.hiDPI = hiDPI; self.hevc = hevc
+        self.appVersion = appVersion; self.identity = identity; self.receiverCode = receiverCode
+    }
 
     var logicalWidth: Int { hiDPI ? width / 2 : width }
     var logicalHeight: Int { hiDPI ? height / 2 : height }
@@ -79,10 +101,28 @@ struct DisplayProfile: Codable {
     }
     func limited(to4K: Bool) -> DisplayProfile {
         let ratio = to4K ? min(1, min(3840.0 / Double(width), 2160.0 / Double(height))) : 1
-        return DisplayProfile(width: Int(Double(width) * ratio) / 2 * 2,
-                              height: Int(Double(height) * ratio) / 2 * 2,
-                              hiDPI: hiDPI, hevc: hevc, appVersion: appVersion)
+        let limitedWidth = Int(Double(width) * ratio) / 2 * 2
+        let limitedHeight = Int(Double(height) * ratio) / 2 * 2
+        return DisplayProfile(width: limitedWidth, height: limitedHeight,
+                              hiDPI: hiDPI, hevc: hevc, appVersion: appVersion,
+                              identity: identity, receiverCode: receiverCode)
     }
+}
+
+struct StreamStatistics: Codable {
+    let fps: Double
+    let roundTripMilliseconds: Double
+    let megabitsPerSecond: Double
+    let codec: String
+    let samples: [Double]
+}
+
+struct AudioConfiguration: Codable {
+    let sampleRate: Double
+    let channels: Int
+    let bytesPerFrame: Int
+    let bitsPerChannel: Int
+    let interleaved: Bool
 }
 
 struct VideoConfiguration: Codable {

@@ -27,7 +27,8 @@
     [hidden] { display: none !important; }
     body {
       min-width: 760px;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
       margin: 0;
       color: var(--ink);
       background: radial-gradient(circle at 80% -12%, #dbeaff 0, transparent 33%), var(--canvas);
@@ -107,6 +108,12 @@
     .sidebar-status.online { background: var(--green); box-shadow: 0 0 0 2px rgba(52,199,89,.13); }
     .sidebar-status.away { background: var(--orange); }
     .sidebar-bottom { display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
+    .setup-nav { margin-top: 12px; }
+    .setup-nav .nav-item { color: var(--secondary); font-size: 12px; }
+    .icon-choice { display: flex; gap: 10px; }
+    .icon-choice button { padding: 7px; background: transparent; border-radius: 8px; }
+    .icon-choice button.active { background: rgba(0,122,255,.12); outline: 1px solid rgba(0,122,255,.34); }
+    .icon-choice img { display: block; width: 52px; height: 52px; border-radius: 12px; }
     .version-status { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; width: 100%; padding: 9px 10px; color: var(--ink); background: rgba(118,118,128,.08); border-radius: 7px; text-align: left; }
     .version-status:hover { background: rgba(118,118,128,.14); }
     .version-status span { display: block; grid-column: 1; }
@@ -365,10 +372,15 @@
     <aside class="sidebar" aria-label="主导航">
       <div class="brand"><span class="brand-mark"><i data-lucide="cable"></i></span>Thunder Display</div>
       <div class="sidebar-label">设备</div>
+      <button class="nav-item" id="local-home"><i data-lucide="monitor"></i>本机状态</button>
       <div id="saved-devices"></div>
       <button class="nav-item" id="add-device-side"><i data-lucide="plus"></i>添加设备</button>
       <div class="sidebar-label">工具</div>
       <button class="nav-item" data-page="diagnostics"><i data-lucide="activity"></i>配置检查</button>
+      <div class="sidebar-label setup-nav">本机配置</div>
+      <button class="nav-item" data-settings="privacy"><i data-lucide="screen-share"></i>屏幕录制</button>
+      <button class="nav-item" data-settings="displays"><i data-lucide="layout-panel-top"></i>排列显示器</button>
+      <button class="nav-item" data-settings="network"><i data-lucide="network"></i>本地网络</button>
       <div class="sidebar-bottom">
         <button class="nav-item" data-page="settings"><i data-lucide="settings"></i>偏好设置</button>
         <button class="version-status" id="open-version" aria-label="查看版本兼容性">
@@ -446,13 +458,6 @@
           </div>
         </div>
 
-        <div class="section"><h3>配置引导</h3>
-          <div class="setup-grid">
-            <div class="setup-step"><span class="step-mark pending"><i data-lucide="circle-help"></i></span><strong>允许屏幕录制</strong><p>连接发送端时检查系统权限。</p><button class="text-action" data-settings="privacy">打开隐私与安全性</button></div>
-            <div class="setup-step"><span class="step-mark pending"><i data-lucide="layout-panel-top"></i></span><strong>排列显示器</strong><p>将虚拟显示器放到合适的位置。</p><button class="text-action" data-settings="displays">打开显示器设置</button></div>
-            <div class="setup-step"><span class="step-mark pending"><i data-lucide="circle-help"></i></span><strong>允许本地网络</strong><p>配置检查会读取当前雷雳网桥状态。</p><button class="text-action" data-settings="network">打开网络设置</button></div>
-          </div>
-        </div>
       </section>
 
       <section class="page" id="diagnostics">
@@ -460,17 +465,18 @@
         <div class="test-status" id="test-status"><i data-lucide="circle-help"></i><span>尚未检测。点击“运行检测”后才会连接并读取真实结果。</span></div>
         <div class="diagnostic-grid">
           <div class="diagnostic-box"><span class="caption">协商链路</span><strong id="diag-link">尚未检测</strong><p id="diag-link-detail">等待雷雳桥接网络状态</p></div>
-          <div class="diagnostic-box"><span class="caption">线材模式</span><strong id="diag-cable">尚未检测</strong><p>无法从系统读取时显示未知，不猜测线材规格。</p></div>
+          <div class="diagnostic-box"><span class="caption">雷雳链路</span><strong id="diag-cable">尚未检测</strong><p id="diag-cable-detail">点击检测读取系统报告。</p></div>
           <div class="diagnostic-box"><span class="caption">可用图传吞吐</span><strong id="diag-throughput">—</strong><p>运行检测后显示本次握手结果；未进行吞吐测试时不填数值。</p></div>
           <div class="diagnostic-box"><span class="caption">当前图传需求</span><strong id="diag-demand">—</strong><p id="diag-demand-detail">建立显示会话后显示实际屏幕参数。</p></div>
         </div>
         <div class="quality-line"><div class="quality-meter" aria-label="尚未检测"><i></i><i></i><i></i><i></i><i></i></div><b>尚未检测</b></div>
-        <div class="section"><h3>结果边界</h3><button class="disclosure" id="toggle-method">查看此检测能证明什么</button><div class="method-note" id="method-note">“Thunderbolt 4”和“被动线”来自 macOS IOKit 可用的 e-marker 与雷雳拓扑信息，缺失时必须显示“无法识别”，不能猜测。吞吐测试只评价这一次两端设备、端口、转接链和线材构成的实际链路；它可以支持“满足当前图传”的结论，不能证明线材没有物理缺陷。</div></div>
+        <div class="section"><h3>结果边界</h3><button class="disclosure" id="toggle-method">查看此检测能证明什么</button><div class="method-note" id="method-note">检测读取雷雳网桥地址、系统报告的对端连接状态和速率。macOS 没有统一公开的主动/被动线材字段，缺失时显示未知。吞吐数据只在真实显示会话中产生。</div></div>
       </section>
 
       <section class="page" id="settings">
         <div class="page-head"><div><h2>偏好设置</h2><p>将少量全局选择放在这里，连接相关选项留在设备详情内。</p></div></div>
         <div class="section"><h3>连接</h3><div class="preference-group"><div class="preference-row"><div><strong>唤醒后自动重连</strong><p>恢复此前正在使用的设备。</p></div><button class="switch on" data-setting="autoReconnect" aria-label="切换唤醒后自动重连"></button></div><div class="preference-row"><div><strong>显示菜单栏状态</strong><p>在菜单栏显示活动会话。</p></div><button class="switch on" data-setting="menuBarStatus" aria-label="切换菜单栏状态"></button></div></div></div>
+        <div class="section"><h3>应用图标</h3><div class="preference-group"><div class="preference-row"><div><strong>Dock 图标</strong><p>切换后立即用于正在运行的应用。</p></div><div class="icon-choice"><button data-app-icon="one" class="active" aria-label="选择闪电显示器图标"><img src="IconOne.png" alt="闪电显示器图标"></button><button data-app-icon="two" aria-label="选择雷雳线图标"><img src="IconTwo.png" alt="雷雳线图标"></button></div></div></div></div>
         <div class="section"><h3>诊断</h3><div class="preference-group"><div class="preference-row"><div><strong>连接前检查配置</strong><p>连接前检查屏幕录制、网络路径和所需权限。</p></div><button class="switch on" data-setting="preflight" aria-label="切换连接前检查"></button></div><div class="preference-row"><div><strong>保留最近检测</strong><p>为每台设备显示最近一次有效吞吐结果。</p></div><button class="switch on" data-setting="keepDiagnostics" aria-label="切换保留检测"></button></div></div><button class="text-action" id="reset-settings">恢复默认设置</button></div>
       </section>
     </main>
@@ -492,12 +498,7 @@
 
   <script>
     const initialDevices = [];
-    if (localStorage.getItem('tb-mvp-data-version') !== '2') {
-      localStorage.removeItem('tb-mvp-devices');
-      localStorage.removeItem('tb-mvp-selected');
-      localStorage.removeItem('tb-mvp-connected');
-      localStorage.setItem('tb-mvp-data-version', '2');
-    }
+    localStorage.setItem('tb-mvp-data-version', '3');
     const storedDevices = JSON.parse(localStorage.getItem('tb-mvp-devices') || 'null');
     let devices = (storedDevices || initialDevices).map((device) => ({
       ...device,
@@ -537,7 +538,7 @@
       localStorage.setItem('tb-mvp-output-mode', outputMode);
       localStorage.setItem('tb-mvp-audio-relay', String(audioRelay));
       localStorage.setItem('tb-mvp-prevent-sleep', String(preventSleep));
-      localStorage.setItem('tb-mvp-data-version', '2');
+      localStorage.setItem('tb-mvp-data-version', '3');
     }
     function showToast(message) { $('#toast-text').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2800); }
 
@@ -609,7 +610,7 @@
       $('#graph-line').setAttribute('d', 'M0 28 L600 28'); $('#graph-line').setAttribute('stroke', '#d2d2d7');
       document.querySelector('.stream-summary').innerHTML = isLive
         ? (isHost
-          ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>实际参数将在首帧后显示 · 音频中继未实现`
+          ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>实际参数将在首帧后显示 · 音频中继${audioRelay ? '开启' : '关闭'}`
           : `<b>正在接收 ${device.name} 的画面</b><br>作为显示器 · 防止息屏${preventSleep ? '开启' : '关闭'}`)
         : (listening
           ? `<b>监听中 · TCP 54321</b><br>等待主机输入地址和配对码`
@@ -680,6 +681,7 @@
     function showPage(id) {
       document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === id));
       document.querySelectorAll('.nav-item[data-page]').forEach((nav) => nav.classList.toggle('active', nav.dataset.page === id));
+      $('#local-home').classList.toggle('active', id === 'current-device');
       const titles = { 'current-device': selected().name, diagnostics: '配置检查', settings: '偏好设置' };
       $('#toolbar-title').textContent = titles[id];
     }
@@ -697,7 +699,6 @@
     }
     function forgetSelectedDevice() {
       const device = selected();
-      if (devices.length === 1) { closeModal('forget-modal'); showToast('至少保留一个设备记录'); return; }
       devices = devices.filter((item) => item.id !== device.id);
       if (connectedId === device.id) connectedId = null;
       selectedId = connectedId || devices[0]?.id || null;
@@ -713,6 +714,7 @@
     }
 
     document.querySelectorAll('.nav-item[data-page]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
+    $('#local-home').addEventListener('click', () => showPage('current-device'));
     $('#toolbar-connect').addEventListener('click', connectSelected);
     $('#toolbar-test').addEventListener('click', () => { showPage('diagnostics'); runTest(); });
     $('#run-test').addEventListener('click', runTest);
@@ -767,6 +769,12 @@
     $('#reset-settings').addEventListener('click', () => {
       Object.assign(settings, defaultSettings); localStorage.setItem('tb-mvp-settings', JSON.stringify(settings)); renderSettings(); showToast('已恢复默认设置');
     });
+    document.querySelectorAll('[data-app-icon]').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('[data-app-icon]').forEach((item) => item.classList.toggle('active', item === button));
+      localStorage.setItem('tb-mvp-app-icon', button.dataset.appIcon);
+    }));
+    const savedAppIcon = localStorage.getItem('tb-mvp-app-icon') || 'one';
+    document.querySelectorAll('[data-app-icon]').forEach((button) => button.classList.toggle('active', button.dataset.appIcon === savedAppIcon));
     document.querySelectorAll('[data-settings]').forEach((button) => button.addEventListener('click', () => {
       const pageNames = { privacy: '隐私与安全性', displays: '显示器', network: '网络' };
       showToast(`原生应用将打开“系统设置 > ${pageNames[button.dataset.settings]}”`);
@@ -778,11 +786,11 @@
     $('#modal-save').addEventListener('click', () => {
       const name = $('#device-name').value.trim(); const ip = $('#device-ip').value.trim();
       const isIPv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip) && ip.split('.').every((part) => Number(part) <= 255);
-      if (!name || !isIPv4) { showToast('请填写设备名称和有效的 IPv4 地址'); return; }
+      const pairingCode = $('#device-code').value.trim();
+      if (!name || !isIPv4 || !/^\d{6}$/.test(pairingCode)) { showToast('请填写设备名称、IPv4 地址和 6 位配对码'); return; }
       const id = `device-${Date.now()}`;
-      const hasPairingCode = $('#device-code').value.trim().length > 0;
-      devices.push({ id, name, model: null, systemVersion: null, ip, pairingCode: $('#device-code').value.trim(), icon: 'laptop', state: 'away', profile: '等待实际握手', last: '尚未连接', detail: `雷雳桥接 · ${ip} · ${hasPairingCode ? '配对码已保存' : '缺少配对码'}`, receiverVersion: null, protocolVersion: null });
-      selectedId = id; persist(); showPage('current-device'); renderDevices(); $('#add-modal').classList.remove('show'); $('#device-name').value = ''; $('#device-ip').value = ''; $('#device-code').value = ''; showToast(`${name} 已保存，配对码将仅存于钥匙串`);
+      devices.push({ id, name, model: null, systemVersion: null, ip, pairingCode, icon: 'laptop', state: 'away', profile: '等待实际握手', last: '尚未连接', detail: `雷雳桥接 · ${ip} · 配对码已保存`, receiverVersion: null, protocolVersion: null });
+      selectedId = id; persist(); showPage('current-device'); renderDevices(); $('#add-modal').classList.remove('show'); $('#device-name').value = ''; $('#device-ip').value = ''; $('#device-code').value = ''; showToast(`${name} 已保存，首次连接后会同步为双端设备记录`);
     });
     document.querySelectorAll('.modal-wrap').forEach((modal) => modal.addEventListener('click', (event) => {
       if (event.target === modal) {
