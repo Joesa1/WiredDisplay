@@ -49,6 +49,15 @@ import Darwin
             }
         }
         let payload = try Wire.json(Hello(version: Wire.protocolVersion, code: "123456", probe: true))
+        let identity = PeerIdentity(id: "check-mac", name: "Check Mac", model: "MacBookPro", systemVersion: "macOS test")
+        let paired = Hello(version: Wire.protocolVersion, code: "123456", identity: identity,
+                           address: "10.10.10.2", receiverCode: "654321")
+        let decodedPair = try Wire.decode(Hello.self, Wire.json(paired))
+        precondition(decodedPair.identity?.id == "check-mac" && decodedPair.receiverCode == "654321")
+        let profile = DisplayProfile(width: 2560, height: 1440, hiDPI: false, hevc: true,
+                                     appVersion: Wire.appVersion, identity: identity, receiverCode: "654321")
+        let decodedProfile = try Wire.decode(DisplayProfile.self, Wire.json(profile))
+        precondition(decodedProfile.identity?.name == "Check Mac" && decodedProfile.receiverCode == "654321")
         let frame = Wire.header(.hello, count: payload.count) + payload
         let fd = client()
         // Exercise split headers and bodies, then two frames in one TCP write.

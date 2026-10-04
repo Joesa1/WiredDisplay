@@ -3,16 +3,15 @@
 A lightweight Mac-to-Mac extended display over a Thunderbolt 3 or newer cable.
 One app contains both roles. The **MacBook sender** creates and captures a virtual
 extended desktop. The **iMac receiver** decodes and displays the incoming video.
-There is no account, subscription, audio transport, or Duet protocol compatibility.
+There is no account, subscription, or Duet protocol compatibility.
 
-## Downloads: 0.5.1 preview
+## Downloads: 0.6.1
 
-Install **0.5.1 on both Macs**. Older receivers can close the connection silently
-when the sender reports a different application version.
+Install **0.6.1 on both Macs**. This version uses protocol 2; protocol 1 builds
+cannot pair with it. The two Macs must run the same release for first use.
 
-- [Apple silicon / arm64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.5.1/ThunderDisplay-arm64.zip)
-- [Intel / x86_64](https://github.com/Joesa1/WiredDisplay/releases/download/v0.5.1/ThunderDisplay-x86_64.zip)
-- [Release and checksums](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.5.1)
+- Apple silicon / arm64: `dist/ThunderDisplay-arm64.zip`
+- Intel / x86_64: `dist/ThunderDisplay-x86_64.zip`
 
 M-series Macs use arm64. Intel Macs use x86_64. Sender and receiver use the same app;
 choose the package for the processor of the Mac where it will run.
@@ -49,15 +48,21 @@ pixel density. The 4K compatibility setting is less sharp by design.
 ## First connection
 
 1. On the iMac, click **将这台 Mac 用作显示器**. Wait for **监听中 · TCP 54321**.
-2. On the MacBook, enter the receiver address and its current six-digit pairing code.
+2. On the MacBook, enter the receiver address and its six-digit pairing code once.
    Bonjour fills an empty address field if exactly one compatible receiver is found;
    manual entry remains available if discovery is blocked.
 3. Click **测试连接** first. It checks TCP, the pairing code, and screen parameters.
    It does not request Screen Recording, create a display, or replace a running session.
-4. After the test succeeds, select quality and click **扩展到这台 Mac**.
+4. After the test succeeds, select **扩展** or **镜像** and click **连接**.
 5. Allow Screen Recording when requested and reconnect. If macOS asks for a relaunch,
    quit and reopen the app.
 6. Arrange the virtual display in the MacBook's **System Settings > Displays**.
+
+The receiver keeps one stable pairing code for that Mac. After a successful first
+pairing, both Macs save each other as devices, including the address and the
+reverse-direction pairing credential. Reconnecting an undeleted device needs one
+click. Deleting a device removes only this Mac's record; the other Mac retains its
+record until it is also deleted.
 
 The receiver stays listening after invalid clients, failed pairing, and disconnects.
 A new client replaces the active session only after valid pairing. **断开** stops
@@ -99,12 +104,19 @@ If Gatekeeper blocks first launch, use Finder's **Open** or the app-specific
 - Wildcard receiver listener; accepted connections must use the current Thunderbolt
   local address before processing the application protocol.
 - Bonjour `_wireddisplay._tcp` advertises address, interface, app and protocol version.
+- Pairing exchanges persistent device identity only after the supplied code is accepted;
+  both apps then add the other Mac to their local device list.
 - TCP_NODELAY, interactive-video service class, bounded frame budget, hardware
   VideoToolbox encoding/decoding, and immediate native video presentation.
 - Cursor coordinates are lightweight, begin after the first decoded frame is
   acknowledged, and use the receiver's native cursor asset so Retina scale does
   not distort its shape.
-- Five-second deadline and eight-candidate limit for unauthenticated clients.
+- ScreenCaptureKit audio relay sends 48 kHz stereo float PCM with a bounded receiver
+  queue. It favors low latency over preserving audio during temporary congestion.
+- Real metrics report encoded throughput, confirmed frame rate, frame confirmation
+  round-trip time, codec, and a rolling 60-s rate graph.
+- The cable check reports the configured Thunderbolt Bridge and macOS-reported peer
+  link state/speed. macOS does not expose a portable active/passive cable field.
 - Protocol-aware probes never become display sessions. Bad clients do not stop listening.
 
 This is an independent implementation. We have not established Duet's proprietary

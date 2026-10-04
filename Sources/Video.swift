@@ -3,6 +3,47 @@ import ScreenCaptureKit
 import VideoToolbox
 import AVFoundation
 
+final class AudioRenderer {
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private var format: AVAudioFormat?
+    private var queued = 0
+    private let lock = NSLock()
+
+    func configure(_ config: AudioConfiguration) throws {
+        guard config.channels == 2, config.bitsPerChannel == 32, config.bytesPerFrame == 8, config.interleaved,
+              let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: config.sampleRate,
+                                         channels: AVAudioChannelCount(config.channels), interleaved: true) else {
+            throw WireError.invalid("音频格式不受支持")
+        }
+        stop()
+        self.format = format
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        try engine.start()
+        player.play()
+    }
+
+    func enqueue(_ data: Data) {
+        guard let format, data.count % 8 == 0 else { return }
+        lock.lock()
+        guard queued < 12 else { lock.unlock(); return }
+        queued += 1; lock.unlock()
+        let frames = AVAudioFrameCount(data.count / 8)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+        buffer.frameLength = frames
+        _ = data.withUnsafeBytes { raw in memcpy(buffer.audioBufferList.pointee.mBuffers.mData, raw.baseAddress!, data.count) }
+        player.scheduleBuffer(buffer) { [weak self] in
+            self?.lock.lock(); self?.queued = max(0, (self?.queued ?? 1) - 1); self?.lock.unlock()
+        }
+    }
+
+    func stop() {
+        player.stop(); engine.stop(); engine.detach(player); format = nil
+        lock.lock(); queued = 0; lock.unlock()
+    }
+}
+
 func check(_ status: OSStatus, _ message: String) throws {
     guard status == noErr else { throw WireError.invalid("\(message)（\(status)）") }
 }
@@ -253,16 +294,23 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private(set) var displayID: CGDirectDisplayID = 0
     var onFailure: ((String) -> Void)?
     var onStatus: ((String) -> Void)?
-    var onStats: ((String) -> Void)?
+    var onStats: ((StreamStatistics) -> Void)?
     private var acknowledged = 0
     private var skipped = 0
     private var lastStats = DispatchTime.now().uptimeNanoseconds
     private var lastRoundTrip = 0.0
+    private var bytesSinceStats = 0
+    private var rateSamples: [Double] = []
+    private var mirror = false
+    private var audioEnabled = false
+    private var sentAudioConfiguration = false
 
     init(peer: CablePeer) { self.peer = peer }
 
-    @MainActor func start(profile: DisplayProfile) async throws {
-        onStatus?("正在创建虚拟显示器 · \(profile.width) × \(profile.height)")
+    @MainActor func start(profile: DisplayProfile, mirror: Bool = false, audio: Bool = false) async throws {
+        self.mirror = mirror
+        self.audioEnabled = audio
+        onStatus?(mirror ? "正在准备镜像采集 · \(profile.width) × \(profile.height)" : "正在创建虚拟显示器 · \(profile.width) × \(profile.height)")
         try profile.validate()
         self.profile = profile
         let descriptor = CGVirtualDisplayDescriptor()
@@ -278,17 +326,22 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         descriptor.greenPrimary = NSPoint(x: 0.30, y: 0.60)
         descriptor.bluePrimary = NSPoint(x: 0.15, y: 0.06)
         descriptor.queue = queue
-        guard let display = CGVirtualDisplay(descriptor: descriptor) else { throw WireError.invalid("无法创建扩展屏幕（CGVirtualDisplay 返回空值）") }
-        let settings = CGVirtualDisplaySettings()
-        settings.hiDPI = profile.hiDPI
-        let factor = profile.hiDPI ? 2 : 1
-        settings.modes = [CGVirtualDisplayMode(width: UInt(profile.width / factor), height: UInt(profile.height / factor), refreshRate: 60)!]
-        guard display.apply(settings) else { throw WireError.invalid("系统拒绝此扩展屏幕尺寸 \(profile.width) × \(profile.height)") }
-        virtualDisplay = display
-        displayID = display.displayID
-        onStatus?("虚拟显示器已创建 · ID \(displayID) · 正在准备硬件编码器")
+        if mirror {
+            displayID = CGMainDisplayID()
+            onStatus?("镜像主屏幕 · ID \(displayID) · 正在准备硬件编码器")
+        } else {
+            guard let display = CGVirtualDisplay(descriptor: descriptor) else { throw WireError.invalid("无法创建扩展屏幕（CGVirtualDisplay 返回空值）") }
+            let settings = CGVirtualDisplaySettings()
+            settings.hiDPI = profile.hiDPI
+            let factor = profile.hiDPI ? 2 : 1
+            settings.modes = [CGVirtualDisplayMode(width: UInt(profile.width / factor), height: UInt(profile.height / factor), refreshRate: 60)!]
+            guard display.apply(settings) else { throw WireError.invalid("系统拒绝此扩展屏幕尺寸 \(profile.width) × \(profile.height)") }
+            virtualDisplay = display
+            displayID = display.displayID
+            onStatus?("虚拟显示器已创建 · ID \(displayID) · 正在准备硬件编码器")
+        }
         try queue.sync { try createEncoder(profile) }
-        onStatus?("硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")
+        onStatus?(mirror ? "硬件编码器已准备 · 正在枚举主屏幕" : "硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")
         var target: SCDisplay?
         for _ in 0..<30 {
             guard !peer.isStopped else { throw WireError.invalid("连接已取消") }
@@ -308,9 +361,10 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         config.showsCursor = false
         config.scalesToFit = true
         config.captureResolution = .best
-        config.capturesAudio = false
+        config.capturesAudio = audio
         let stream = SCStream(filter: SCContentFilter(display: target, excludingWindows: []), configuration: config, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
+        if audio { try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue) }
         self.stream = stream
         try await stream.startCapture()
         onStatus?("屏幕采集已启动 · 等待首帧")
@@ -351,7 +405,9 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard active, type == .screen, sampleBuffer.isValid,
+        guard active, sampleBuffer.isValid else { return }
+        if type == .audio { relayAudio(sampleBuffer); return }
+        guard type == .screen,
               let info = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let status = info.first?[.status] as? Int, status == SCFrameStatus.complete.rawValue,
               let image = CMSampleBufferGetImageBuffer(sampleBuffer), let encoder else { return }
@@ -362,6 +418,27 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         let result = VTCompressionSessionEncodeFrame(encoder, imageBuffer: image, presentationTimeStamp: pts,
             duration: .invalid, frameProperties: nil, sourceFrameRefcon: UnsafeMutableRawPointer(bitPattern: UInt(sequence)), infoFlagsOut: nil)
         if result != noErr { onFailure?("编码器跟不上当前分辨率（\(result)）") }
+    }
+
+    private func relayAudio(_ sampleBuffer: CMSampleBuffer) {
+        guard audioEnabled, let description = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee,
+              stream.mFormatID == kAudioFormatLinearPCM,
+              stream.mChannelsPerFrame == 2, stream.mBitsPerChannel == 32, stream.mBytesPerFrame == 8,
+              stream.mFormatFlags & kAudioFormatFlagIsFloat != 0,
+              let block = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+        let length = CMBlockBufferGetDataLength(block)
+        guard length > 0, length < 256 * 1024 else { return }
+        if !sentAudioConfiguration {
+            let config = AudioConfiguration(sampleRate: stream.mSampleRate, channels: 2, bytesPerFrame: 8,
+                                            bitsPerChannel: 32, interleaved: true)
+            peer.send(.audioConfiguration, (try? Wire.json(config)) ?? Data())
+            sentAudioConfiguration = true
+        }
+        var data = Data(count: length)
+        let copied = data.withUnsafeMutableBytes { CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: length, destination: $0.baseAddress!) }
+        guard copied == noErr else { return }
+        peer.send(.audio, data)
     }
     func stream(_ stream: SCStream, didStopWithError error: Error) { onFailure?(error.localizedDescription) }
 
@@ -399,6 +476,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 destination: raw.baseAddress!.advanced(by: 8)), "无法读取编码帧")
         }
         peer.send(.video, data)
+        bytesSinceStats += data.count
     }
 
     func acknowledge(_ data: Data) {
@@ -412,8 +490,15 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 self.acknowledged += 1
                 if now - self.lastStats >= 1_000_000_000 {
                     let fps = Double(self.acknowledged) * 1_000_000_000 / Double(now - self.lastStats)
-                    self.onStats?(String(format: "%.0f 帧/秒 · 确认往返 %.0f ms", fps, self.lastRoundTrip))
-                    self.acknowledged = 0; self.lastStats = now
+                    let mbps = Double(self.bytesSinceStats * 8) * 1_000_000_000 / Double(now - self.lastStats) / 1_000_000
+                    self.rateSamples.append(mbps)
+                    if self.rateSamples.count > 60 { self.rateSamples.removeFirst(self.rateSamples.count - 60) }
+                    let stats = StreamStatistics(fps: fps, roundTripMilliseconds: self.lastRoundTrip,
+                                                 megabitsPerSecond: mbps, codec: self.profile?.hevc == true ? "HEVC" : "H.264",
+                                                 samples: self.rateSamples)
+                    self.onStats?(stats)
+                    self.peer.send(.statistics, (try? Wire.json(stats)) ?? Data())
+                    self.acknowledged = 0; self.bytesSinceStats = 0; self.lastStats = now
                 }
             } catch { self.onFailure?(error.localizedDescription) }
         }
@@ -431,6 +516,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
             encoder = nil
         }
         virtualDisplay = nil
+        audioEnabled = false; sentAudioConfiguration = false
         displayID = 0
         onStatus?("发送端视频已停止")
     }

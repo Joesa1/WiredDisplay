@@ -49,6 +49,45 @@ struct CableAddress {
     var description: String { "\(name) \(ip) (#\(index))" }
 }
 
+struct ThunderboltReport {
+    let summary: String
+    let detail: String
+}
+
+enum ThunderboltInspector {
+    private static var cached = ThunderboltReport(summary: "尚未检测", detail: "点击检测雷雳线后读取系统链路信息。")
+    private static var lastRefresh = Date.distantPast
+
+    static func report(cable: CableAddress?) -> ThunderboltReport {
+        guard let cable else { return ThunderboltReport(summary: "未发现雷雳网桥", detail: "请连接数据线并在网络设置启用雷雳网桥。") }
+        return ThunderboltReport(summary: "雷雳网桥可用 · \(cable.name) · \(cable.ip)", detail: cached.detail)
+    }
+
+    static func refresh(cable: CableAddress?) -> ThunderboltReport {
+        guard cable != nil else { return report(cable: nil) }
+        guard Date().timeIntervalSince(lastRefresh) > 2 else { return report(cable: cable) }
+        lastRefresh = Date()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
+        process.arguments = ["SPThunderboltDataType", "-detailLevel", "mini"]
+        let pipe = Pipe(); process.standardOutput = pipe; process.standardError = pipe
+        do {
+            try process.run(); process.waitUntilExit()
+            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let connected = output.localizedCaseInsensitiveContains("Status: Device connected")
+            let speed = output.split(separator: "\n").first { $0.contains("Speed:") }?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? "速率未由系统报告"
+            cached = ThunderboltReport(summary: connected ? "雷雳链路已连接 · \(speed)" : "已找到雷雳网桥，未发现对端设备",
+                                      detail: connected
+                                        ? "系统确认对端已连接。macOS 未提供通用的主动/被动线材字段，应用不会伪造该信息。"
+                                        : "系统未报告已连接的雷雳对端；请检查线材、端口或转接设备。")
+        } catch {
+            cached = ThunderboltReport(summary: "雷雳网桥可用", detail: "无法读取系统链路报告：\(error.localizedDescription)")
+        }
+        return report(cable: cable)
+    }
+}
+
 // Network.framework owns socket lifetime, TCP framing reads and path changes.
 // A required local endpoint pins the source address to the Thunderbolt bridge.
 final class CablePeer {
