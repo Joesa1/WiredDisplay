@@ -775,6 +775,9 @@
         const enabled = settings[switchButton.dataset.setting];
         switchButton.classList.toggle('on', enabled);
         switchButton.setAttribute('aria-pressed', String(enabled));
+        if (['autoReconnect', 'menuBarStatus'].includes(switchButton.dataset.setting)) {
+          window.webkit?.messageHandlers?.thunderDisplay?.postMessage({ action: 'preference', key: switchButton.dataset.setting, enabled });
+        }
       });
     }
     document.querySelectorAll('.switch[data-setting]').forEach((switchButton) => switchButton.addEventListener('click', () => {
