@@ -15,7 +15,10 @@
 ## 验证状态
 
 - Swift 语法检查、内嵌 JavaScript 语法检查及 git diff --check 已通过。
-- 原始 build.sh 和 TransportCheck 遇到本机 Command Line Tools 的 SwiftBridging 重复模块定义，并报告 SDK 与编译器不匹配，尚未得到可安装构建；临时编译参数尝试也未能完成完整类型检查。
+- 原始构建遇到本机 Command Line Tools 的 SwiftBridging 重复模块定义。后续通过 Swift 的 `-vfsoverlay` 临时屏蔽重复的 `usr/include/swift/module.modulemap`（保留 `bridging.modulemap`），未修改系统文件。
+- 使用 macOS 15.2 SDK，完整 Swift 类型检查、arm64/x86_64 优化编译及通用二进制打包已通过；本地 ad-hoc 签名验证和 ZIP 完整性检查通过。
+- TransportCheck 已通过：分片/合并数据包、超大包拒绝、重连、重复关闭。
+- 已生成本地 0.6.2-pr1 测试包（实现提交 9240cfc），使用独立 bundle ID `local.wired-display.test`。测试版需重新授权权限，并与正式版择一运行；尚未公证。
 - 两台 Mac 真机睡眠/唤醒测试尚未执行，不能把静态检查视为已解决实机黑屏的证据。
 
 ## 双机验收
