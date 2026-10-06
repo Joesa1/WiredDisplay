@@ -17,7 +17,7 @@ enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
     static let protocolVersion = 2
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.2"
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.3"
     static let maximumPacket = 16 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()

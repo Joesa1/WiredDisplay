@@ -41,6 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var monitorTimer: Timer?
     private var pointerStarted = false
     private var receiverCursorHidden = false
+    private var statusItem: NSStatusItem?
+    private var statusText: NSMenuItem?
+    private var disconnectItem: NSMenuItem?
+    private var reconnectItem: NSMenuItem?
+    private var systemSleeping = false
+    private var resumeAfterSleep = false
+    private var reconnectAttempt = false
+    private var pendingReconnect = false
+    private var reconnectDeadline = Date.distantPast
     private var ticks = 0
     private var sessionID = UUID()
     private var code = ""
@@ -76,7 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         applyAppIcon()
         buildMenu()
         buildWindow()
+        buildStatusMenu()
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(self, selector: #selector(systemWillSleep), name: NSWorkspace.willSleepNotification, object: nil)
+        center.addObserver(self, selector: #selector(systemDidWake), name: NSWorkspace.didWakeNotification, object: nil)
         monitorTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(monitorTimer!, forMode: .common)
         discovery.onReceivers = { [weak self] addresses in
             guard let self, !self.connecting, self.peer == nil else { return }
             let remote = addresses.filter { $0 != CableAddress.current()?.ip }
@@ -90,6 +104,101 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.receive() }
         }
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func buildStatusMenu() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = item
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        statusText = menu.addItem(withTitle: "未连接", action: nil, keyEquivalent: "")
+        statusText?.isEnabled = false
+        menu.addItem(.separator())
+        let show = menu.addItem(withTitle: "打开 Thunder Display", action: #selector(showMainWindow), keyEquivalent: "")
+        show.target = self
+        disconnectItem = menu.addItem(withTitle: "断开连接", action: #selector(disconnect), keyEquivalent: "")
+        disconnectItem?.target = self
+        reconnectItem = menu.addItem(withTitle: "重新连接", action: #selector(reconnectFromMenu), keyEquivalent: "")
+        reconnectItem?.target = self
+        menu.addItem(.separator())
+        let quit = menu.addItem(withTitle: "退出 Thunder Display", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApp
+        item.menu = menu
+        item.isVisible = UserDefaults.standard.object(forKey: "menuBarStatus") == nil || UserDefaults.standard.bool(forKey: "menuBarStatus")
+        updateStatusMenu()
+    }
+
+    private func updateStatusMenu() {
+        let live = !stopping && !systemSleeping && peer != nil && (pointerStarted || videoWindow != nil)
+        let busy = connecting || pendingReconnect || (peer != nil && !live)
+        let label = systemSleeping ? "已暂停" : stopping ? "正在断开" : live ? "已连接" : busy ? "正在连接" : listener != nil ? "等待主机连接" : "未连接"
+        let symbol = live ? "display" : busy ? "arrow.triangle.2.circlepath" : "display.trianglebadge.exclamationmark"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+            ?? NSImage(systemSymbolName: "display", accessibilityDescription: label)
+        statusItem?.button?.image?.isTemplate = true
+        statusItem?.button?.toolTip = "Thunder Display · \(label)"
+        statusText?.title = label
+        disconnectItem?.isEnabled = !stopping && (peer != nil || listener != nil || connecting || pendingReconnect)
+        reconnectItem?.isEnabled = !stopping && !systemSleeping
+    }
+
+    @objc private func showMainWindow() {
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func reconnectFromMenu() {
+        endSession("正在重新连接…")
+        scheduleReconnect()
+    }
+
+    private func scheduleReconnect() {
+        pendingReconnect = true
+        reconnectDeadline = Date().addingTimeInterval(30)
+        updateStatusMenu()
+    }
+
+    @objc private func systemWillSleep() {
+        guard !systemSleeping else { return }
+        resumeAfterSleep = peer != nil || listener != nil || connecting || pendingReconnect
+        systemSleeping = true
+        endSession("系统进入睡眠，已暂停连接。")
+    }
+
+    @objc private func systemDidWake() {
+        guard systemSleeping else { return }
+        systemSleeping = false
+        let resume = resumeAfterSleep
+        resumeAfterSleep = false
+        endSession("系统已唤醒，旧显示会话已清理。")
+        let automatic = UserDefaults.standard.object(forKey: "autoReconnect") == nil || UserDefaults.standard.bool(forKey: "autoReconnect")
+        if resume && (UserDefaults.standard.bool(forKey: "displayRole") || automatic) { scheduleReconnect() }
+    }
+
+    // Retry transport failures while the other Mac is still waking up. Explicit
+    // disconnect, role changes and successful first-frame delivery cancel retries.
+    private func connectionFailed(_ message: String) {
+        let retry = reconnectAttempt && Date() < reconnectDeadline && !quitting && !systemSleeping
+        let deadline = reconnectDeadline
+        endSession(message)
+        if retry {
+            pendingReconnect = true
+            reconnectDeadline = deadline
+        }
+    }
+
+    private func clearVideoPresentation() {
+        if receiverCursorHidden { NSCursor.unhide(); receiverCursorHidden = false }
+        let video = videoWindow
+        videoWindow = nil
+        video?.delegate = nil
+        video?.orderOut(nil)
+        video?.close()
+        surface.reset()
+        surface.onSubmit = nil
+        surface.onFirstImage = nil
+        updateSleepActivity()
     }
 
     private func buildMenu() {
@@ -438,6 +547,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             audioRequested = body["audio"] as? Bool ?? true
             remoteSleepRequested = body["preventSleep"] as? Bool ?? true
             startConnection(probe: false)
+        case "preference":
+            if let key = body["key"] as? String, ["autoReconnect", "menuBarStatus"].contains(key), let enabled = body["enabled"] as? Bool {
+                UserDefaults.standard.set(enabled, forKey: key)
+                if key == "menuBarStatus" { statusItem?.isVisible = enabled }
+            }
         case "test":
             let address = body["address"] as? String ?? ""
             let pairingCode = body["code"] as? String ?? ""
@@ -454,7 +568,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             let display = body["role"] as? String == "display"
             if peer != nil || listener != nil || connecting { endSession("正在切换本机角色…") }
             UserDefaults.standard.set(display, forKey: "displayRole")
-            if display && listener == nil && peer == nil { receive() }
+            if display && listener == nil && peer == nil {
+                if stopping { scheduleReconnect() } else { receive() }
+            }
             if !display { prototypePairing(address: nil, code: nil) }
         case "preventSleep":
             if body["role"] as? String == "host" {
@@ -771,11 +887,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             sleepActivity = nil
         }
     }
-    private func fail(_ message: String) {
-        DispatchQueue.main.async { [weak self] in self?.endSession(message) }
-    }
-
     @objc private func receive() {
+        guard !systemSleeping, !stopping, listener == nil else { return }
         guard let cable = CableAddress.current() else { statusLabel.stringValue = "未找到雷雳网络地址。请连接两台 Mac，并检查系统设置 → 网络 → 雷雳网桥。"; return }
         do {
             let listener = try CableListener(cable: cable)
@@ -874,12 +987,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                         self.peer = accepted
                         self.receiveLock.lock(); self.receiveSession = session; self.receiveLock.unlock()
                         previous?.stop()
-                        self.surface.reset()
+                        self.clearVideoPresentation()
                         self.surface.onSubmit = { [weak accepted] sequence in
                             var data = Data(); Wire.append(sequence, to: &data)
                             accepted?.send(.acknowledgment, data)
                         }
-                        self.surface.onFirstImage = { [weak self] in self?.showVideo() }
+                        self.surface.onFirstImage = { [weak self, weak accepted] in
+                            guard let self, let accepted, self.sessionID == generation, self.peer === accepted else { return }
+                            self.showVideo()
+                        }
                         self.record("配对通过 · 发射端 \(hello.appVersion ?? "未知") · 等待视频配置")
                         self.receiverKeepAwake = hello.preventDisplaySleep ?? true
                         self.prototypeConnection(true, message: "已配对，等待视频", peerID: hello.identity?.id)
@@ -939,8 +1055,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 }
                 self.peer = nil
                 self.receiveLock.lock(); self.receiveSession = nil; self.receiveLock.unlock()
-                self.surface.reset()
-                self.videoWindow?.orderOut(nil); self.videoWindow = nil
+                self.clearVideoPresentation()
+                self.prototypeConnection(false)
+                self.metricsLabel.stringValue = ""
                 self.record("\(reason)；接收端仍在监听，可直接重连。")
             }
         }
@@ -975,6 +1092,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     @objc private func testConnection() { startConnection(probe: true) }
 
     private func startConnection(probe: Bool) {
+        guard !systemSleeping, !stopping, !connecting, peer == nil else { return }
         guard #available(macOS 14.0, *) else { if probe { prototypeTestResult(false, profile: nil, message: "当前 macOS 不支持发送端虚拟显示器。") }; statusLabel.stringValue = "发送扩展屏需要 macOS 14 或更新。"; return }
         guard let cable = CableAddress.current() else { if probe { prototypeTestResult(false, profile: nil, message: "未发现雷雳网桥，请先连接雷雳线并配置网络。") }; statusLabel.stringValue = "请连接雷雳线，并等待雷雳网桥获得地址。"; return }
         let ip = addressField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1033,7 +1151,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 if limited { self.record("已选择 4K 兼容档 · 文字清晰度会低于原生 Retina 档") }
                                 let sender = ScreenSender(peer: connection)
                                 self.sender = sender
-                                sender.onFailure = { [weak self] message in self?.fail(message) }
+                                sender.onFailure = { [weak self] message in
+                                    DispatchQueue.main.async {
+                                        guard let self, self.sessionID == generation else { return }
+                                        self.endSession(message)
+                                    }
+                                }
                                 sender.onStatus = { [weak self] message in
                                     DispatchQueue.main.async {
                                         guard let self, self.sessionID == generation else { return }
@@ -1065,6 +1188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 sender.acknowledge(data)
                                 guard !self.pointerStarted else { return }
                                 self.pointerStarted = true
+                                self.reconnectAttempt = false
                                 self.record("首帧已确认 · 已启动轻量鼠标同步")
                                 self.startPointer(sender: sender, peer: connection)
                             }
@@ -1091,7 +1215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 ? "TCP 已连接，接收端未完成屏幕参数交换：\(message)。旧版接收端可能因版本或配对码不符而直接断开；请更新两台 Mac。"
                                 : message
                             if probe { self.prototypeTestResult(false, profile: nil, message: detail) }
-                            self.endSession(detail)
+                            self.connectionFailed(detail)
                         }
                     }
                     peer.onState = { [weak self] message in
@@ -1119,7 +1243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 DispatchQueue.main.async {
                     guard let self, self.sessionID == generation else { return }
                     if probe { self.prototypeTestResult(false, profile: nil, message: error.localizedDescription) }
-                    self.endSession(error.localizedDescription)
+                    self.connectionFailed(error.localizedDescription)
                 }
             }
         }
@@ -1145,7 +1269,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 
     private func tick() {
+        defer { updateStatusMenu() }
+        guard !systemSleeping else { return }
         let cable = CableAddress.current()
+        if pendingReconnect && !stopping {
+            if Date() > reconnectDeadline {
+                pendingReconnect = false
+                record("重连等待超时，请检查雷雳连接后从菜单栏重试。")
+            } else if cable != nil {
+                pendingReconnect = false
+                if UserDefaults.standard.bool(forKey: "displayRole") { receive() }
+                else {
+                    reconnectAttempt = true
+                    startConnection(probe: false)
+                }
+            }
+        }
         prototypeVersion()
         cableLabel.stringValue = cable.map { "雷雳网桥  \($0.ip) · \($0.name)" } ?? "雷雳网桥  未就绪"
         diagnosticCableLabel.stringValue = CableAddress.current().map { "雷雳网桥  \($0.ip) · \($0.name) · 已就绪" } ?? "雷雳网桥未就绪"
@@ -1167,6 +1306,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @objc private func disconnect() { endSession("已断开，可以开始新的连接。") }
     private func endSession(_ message: String) {
+        pendingReconnect = false
+        reconnectAttempt = false
         guard !stopping else { return }
         stopping = true
         sessionID = UUID()
@@ -1181,10 +1322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         candidates.removeAll()
         peer?.stop(); peer = nil
         receiveLock.lock(); receiveSession = nil; receiveLock.unlock()
-        videoWindow?.orderOut(nil); videoWindow = nil
-        updateSleepActivity()
-        surface.reset()
-        surface.onSubmit = nil; surface.onFirstImage = nil
+        clearVideoPresentation()
         pairingLabel.stringValue = ""
         prototypeConnection(false)
         prototypeListening(false)
@@ -1208,6 +1346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         connectionStateLabel.stringValue = message
         diagnosticStatusLabel.stringValue = message
         prototypeStatus(message, active: peer != nil || listener != nil || connecting)
+        updateStatusMenu()
         NSLog("%@", message)
     }
     @objc private func copyDiagnostics() {
@@ -1225,7 +1364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if sender === videoWindow { endSession("显示已停止。"); return false }
-        NSApp.terminate(nil)
+        sender.miniaturize(nil)
         return false
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -1234,7 +1373,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         if !stopping { endSession("正在停止…") }
         return .terminateLater
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showMainWindow()
+        return true
+    }
 }
 
 @main
