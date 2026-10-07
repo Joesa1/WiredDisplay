@@ -9,28 +9,28 @@
 ## 帧格式
 
 ```text
-0                   3 4                 4 + payloadLength
+0                   3 4                 4 + N
 +---------------------+------------------+--------------------+
-| payload length (BE) | packet kind (u8) | payload bytes      |
+| length = 1 + N (BE) | packet kind (u8) | payload bytes      |
 +---------------------+------------------+--------------------+
         4 bytes              1 byte             N bytes
 ```
 
-`payload length` 不包含 `packet kind`。最大 payload 由 `Wire.maxPayload` 限制；接收方必须在分配 payload 前检查上限。
+`length` 包含 `packet kind`。帧总长度必须在 `1...Wire.maximumPacket`；接收方必须在分配 payload 前检查上限。JSON 控制消息还受 `Wire.decode` 的 `256 KiB` 限制，媒体帧不走该 JSON 解码边界。
 
 ## 消息表
 
 | `PacketKind` | 方向 | Payload | 合同 |
 | --- | --- | --- | --- |
-| `hello` | 双向 | `Hello` | 第一条业务包。携带协议、身份、配对码和 probe 标记。 |
-| `profile` | 显示器 -> 主机 | `DisplayProfile` | 宣告显示器可接受的尺寸、缩放和能力。 |
+| `hello` | 主机 -> 显示器 | `Hello` | 第一条业务包。携带版本、`code`、可选身份、应用版本、地址、反向码、probe 与息屏请求。 |
+| `profile` | 显示器 -> 主机 | `DisplayProfile` | 宣告可接受的像素尺寸、HiDPI、HEVC 和显示器身份。 |
 | `configuration` | 主机 -> 显示器 | `VideoConfiguration` | 视频编解码、尺寸和参数；每个接收会话仅一次。 |
 | `video` | 主机 -> 显示器 | 编码帧 | 只有完成视频配置后可接收，序号严格递增。 |
 | `acknowledgment` | 显示器 -> 主机 | 帧确认 | 用于发送端统计确认帧率和往返画面时间。 |
-| `cursor` | 双向 | `PointerUpdate` | 最佳努力；非法鼠标消息不应终止视频。 |
-| `heartbeat` | 双向 | 时间/活动信息 | 对端回送，用于存活和 RTT 统计。 |
+| `cursor` | 主机 -> 显示器 | `PointerUpdate` | 仅发送主机光标的展示状态；非法消息不终止视频。 |
+| `heartbeat` | 主机 -> 显示器 -> 主机 | 空 payload | 主机发起，显示器回送，用于会话存活。 |
 | `end` | 双向 | 可选原因 | 结束当前会话并触发标准释放。 |
-| `statistics` | 显示器 -> 主机 | `StreamStatistics` | 传递当前会话指标。 |
+| `statistics` | 主机 -> 显示器 | `StreamStatistics` | 主机计算并把当前会话指标交给显示器工作台展示。 |
 | `audioConfiguration` | 主机 -> 显示器 | `AudioConfiguration` | 独立于视频的 PCM 音频格式。 |
 | `audio` | 主机 -> 显示器 | PCM 数据 | 只有音频已配置时可入队。 |
 
@@ -38,13 +38,13 @@
 
 | 类型 | 关键字段 | 不变量 |
 | --- | --- | --- |
-| `PeerIdentity` | 设备 ID、名称、机型、系统版本、应用版本 | 连接成功后设备名称和能力由对端回读，不以首次输入名称为准。 |
-| `Hello` | protocol、identity、pairingCode、probe | `probe == true` 只获得 profile，不占用活动流会话。 |
-| `DisplayProfile` | 逻辑尺寸、像素尺寸、scale、可用模式 | 主机的配置不得超过接收端承诺。 |
-| `VideoConfiguration` | codec、宽高、参数 | 配置一次；视频必须匹配已接受的配置。 |
+| `PeerIdentity` | `id`、`name`、`model`、`systemVersion` | 连接成功后设备名称和能力由对端回读，不以首次输入名称为准。 |
+| `Hello` | `version`、`code`、`appVersion`、`identity`、`address`、`receiverCode`、`probe`、`preventDisplaySleep` | `probe == true` 只获得 profile，不占用活动流会话。 |
+| `DisplayProfile` | `width`、`height`、`hiDPI`、`hevc`、`appVersion`、`identity`、`receiverCode` | 逻辑尺寸由 `hiDPI` 推导；主机配置不得超过接收端承诺。 |
+| `VideoConfiguration` | `width`、`height`、`hevc`、`parameterSets` | 配置一次；视频必须匹配已接受的配置。 |
 | `AudioConfiguration` | sample rate、channels、格式 | 发送音频前必须先配置。 |
-| `PointerUpdate` | 坐标、按钮、滚动 | 坐标按显示器 profile 映射，避免宽高比例不同导致光标变形。 |
-| `FrameBudget` | 未确认帧和队列界限 | 队列到上限时优先丢弃旧帧，避免延迟线性积累。 |
+| `PointerUpdate` | `x`、`y`、`visible`、热点、尺寸与可选 PNG | 仅表达光标位置和图像，不表达点击、键盘或滚动。 |
+| `FrameBudget` | 未确认帧与序号 | 最多保留三个未确认帧；满额时跳过新采集帧，不丢弃已编码参考帧。 |
 
 ## 认证与会话流
 
@@ -58,7 +58,7 @@
 7. `end`, socket close or fatal validation failure tears down only this session
 ```
 
-已成功配对的设备记录保存稳定身份、可用地址和凭据；断开、重新监听或刷新页面不应重新生成本机配对码。只有“忘记设备”才删除双方后续直连所需的本地记录。
+当前实现将设备页面记录保存在 WebView `localStorage`，并将本机配对码及按地址索引的凭据保存在 `UserDefaults`。断开、重新监听或刷新页面不应重新生成本机配对码。删除页面设备尚未同步清理原生凭据，此差距见 `device-state-001`。
 
 ## 错误与兼容性
 

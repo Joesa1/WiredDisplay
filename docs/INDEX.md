@@ -15,7 +15,7 @@
 ## 文档边界
 
 - 本目录只描述 `WiredDisplay/` 的可执行实现。
-- 工作区根目录的 [`../docs/sessions/wired-display.md`](../../docs/sessions/wired-display.md) 描述跨项目会话基线；当会话协议发生变化，两处都必须同步检查。
+- 当前工作区可能另有跨项目会话资料，但它不属于本仓库，不能作为本项目文档的链接依赖。发布或独立 clone 中以本目录为准。
 - `Resources/mvp-ui-prototype.html` 是运行时加载的界面资源。原型的展示文案不构成实现事实；本目录的界面和协议文档才是维护依据。
 
 ## 当前版本事实

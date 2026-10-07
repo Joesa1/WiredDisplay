@@ -31,11 +31,11 @@ Wire frames                                validate first packet in AppDelegate
 
 ## 帧边界
 
-Wire 头部定义在 `Wire.header`：4 字节大端 payload 长度，随后 1 字节 `PacketKind`，再跟 payload。`CablePeer` 负责把 TCP 任意分段重新组装为完整帧，也允许一次 receive 中含多个帧。
+Wire 头部定义在 `Wire.header`：4 字节大端 `length`，随后 1 字节 `PacketKind`，再跟 payload。`length` 包含 `PacketKind` 的 1 字节与 payload 的 N 字节，即 `1 + N`。`CablePeer` 负责把 TCP 任意分段重新组装为完整帧，也允许一次 receive 中含多个帧。
 
 | 条件 | 行为 |
 | --- | --- |
-| 长度为 0 或超出 `Wire.maxPayload` | 终止 peer，报告无效帧。 |
+| 长度为 0 或超出 `Wire.maximumPacket` | 终止 peer，报告无效帧。 |
 | 包类型字节无法映射到 `PacketKind` | 终止 peer，报告无效帧。 |
 | TCP `.waiting`、`.failed`、`.cancelled` | 完成当前 peer；由 `AppDelegate` 决定是否恢复。 |
 | `sendPointer` | 鼠标流量可合并/替换，以免其积压视频。 |

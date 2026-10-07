@@ -25,7 +25,8 @@
 | UI -> Native -> display session | HTML `session(display)` -> `AppDelegate.receive` -> `CableListener` -> `ReceiveSession` | 显示器页面必须展示稳定 bridge/配对码并保持监听。 |
 | Host -> Display handshake | `CablePeer` -> `hello` -> `ReceiveSession` -> `profile` | 错码、协议错、probe、已配对重连分别可解释。 |
 | Host -> Display media | `ScreenSender` -> Wire configuration/video/audio -> decoder/surface/renderer | 扩展、镜像、音频、低延迟帧预算各自真实生效。 |
-| Receiver -> Host feedback | acknowledgment/cursor/heartbeat/statistics -> `AppDelegate` -> WebView | 指标只归属当前活动设备，不跨设备串数据。 |
+| Receiver -> Host feedback | `acknowledgment` 与 heartbeat echo -> `AppDelegate` | 确认帧释放预算并计算确认时间；旧会话不得污染当前状态。 |
+| Host -> Display metrics | `ScreenSender` 的 `statistics` -> `ReceiveSession` -> WebView | 指标只归属当前活动设备，不跨设备串数据。 |
 | System -> lifecycle | sleep/wake -> `AppDelegate` -> end/reconnect -> UI/menu | 旧回调不污染新会话，手动断开不自动复连。 |
 | Source -> release | `Info.plist` + `build.sh` -> arch ZIP + GitHub release | tag、版本、架构资产和哈希一致。 |
 

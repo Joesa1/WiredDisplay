@@ -16,8 +16,9 @@ Thunder Display 将一台 Mac 的桌面画面经雷雳网桥传到另一台 Mac�
 │  └─ CablePeer                       │             │  ├─ CableListener                   │
 └────────────────────────────────────┘             │  └─ VideoSurface                    │
                                                     └────────────────────────────────────┘
-                 ^                                             │
-                 └──────── cursor / heartbeat / statistics ───┘
+
+ Host -> Display: configuration, video, audio, cursor, statistics, heartbeat
+ Display -> Host: profile, acknowledgment, heartbeat
 
             CableAddress / ThunderboltInspector select `bridgeN` on both sides
 ```
