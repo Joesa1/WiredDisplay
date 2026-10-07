@@ -594,7 +594,7 @@
       return device.protocolVersion === senderProtocol ? 'compatible' : 'incompatible';
     }
     function compatibilityLabel(status) {
-      return { compatible: '已兼容', incompatible: '需要更新', unknown: '待验证' }[status];
+      return { compatible: '已兼容', incompatible: '待重新发现', unknown: '待验证' }[status];
     }
     function updateIcons() { if (window.lucide) lucide.createIcons(); }
     function persist() {
@@ -658,11 +658,11 @@
       $('#pairing-address').textContent = pairing.address || '等待雷雳网桥';
       $('#pairing-code').textContent = pairing.code || '切换为显示器后生成';
       $('#sidebar-local-version').textContent = `本机（${localRoleName}）v${senderVersion}`;
-      $('#sidebar-receiver-version').textContent = target.id ? `${target.name}（${remoteRoleName}）v${target.receiverVersion || '待发现'}` : `尚未添加设备（${remoteRoleName}）`;
+      $('#sidebar-receiver-version').textContent = target.id ? `${target.name}（${remoteRoleName}）上次 v${target.receiverVersion || '待发现'}` : `尚未添加设备（${remoteRoleName}）`;
       $('#modal-local-build-label').textContent = `本机（${localRoleName}）安装版本`;
       $('#modal-local-protocol-label').textContent = `本机（${localRoleName}）协议级别`;
-      $('#modal-receiver-build-label').textContent = `${target.name}（${remoteRoleName}）安装版本`;
-      $('#modal-receiver-protocol-label').textContent = `${target.name}（${remoteRoleName}）协议级别`;
+      $('#modal-receiver-build-label').textContent = `${target.name}（${remoteRoleName}）上次握手版本`;
+      $('#modal-receiver-protocol-label').textContent = `${target.name}（${remoteRoleName}）上次握手协议`;
     }
     function renderMetrics(stats) {
       const hasStats = !!stats;
@@ -716,8 +716,8 @@
         : listening ? '断开监听'
         : (isHost ? `${outputMode === 'extend' ? '扩展到' : '镜像到'} ${device.name}` : `作为显示器连接`);
       $('#toolbar-title').textContent = `${isHost ? '主机' : '显示器'} · ${device.name}`;
-      $('#toolbar-connect').disabled = isHost && (isLocal || !device.ip || !device.pairingCode || compatibility === 'incompatible');
-      $('#toolbar-connect').title = isLocal && isHost ? '请在左侧选择显示器' : compatibility === 'incompatible' ? '接收端协议不兼容，需要更新' : '';
+      $('#toolbar-connect').disabled = isHost && (isLocal || !device.ip || !device.pairingCode);
+      $('#toolbar-connect').title = isLocal && isHost ? '请在左侧选择显示器' : compatibility === 'incompatible' ? '上次握手版本不同；连接时会重新验证' : '';
       $('#device-actions').hidden = isLocal;
       $('#hero-version').hidden = isLocal;
       renderMetrics(isLive ? metricsByDevice[device.id] : null);
@@ -740,20 +740,20 @@
       $('#sidebar-version-state').textContent = compatibilityLabel(compatibility);
       $('#open-version').className = `version-status ${compatibility}`;
       $('#hero-version').className = `version-chip ${compatibility}`;
-      $('#hero-version-text').textContent = compatibility === 'compatible' ? '版本已兼容' : compatibility === 'incompatible' ? '需要更新' : '待验证版本';
+      $('#hero-version-text').textContent = compatibility === 'compatible' ? '版本已兼容' : compatibility === 'incompatible' ? '上次记录不同' : '待验证版本';
       $('#modal-receiver-build').textContent = receiverBuild;
       $('#modal-receiver-protocol').textContent = receiverProtocol;
-      $('#version-subtitle').textContent = `${device.name} 的安装版本与协议级别`;
+      $('#version-subtitle').textContent = `${device.name} 的上次握手版本与协议记录`;
       const result = $('#compatibility-result');
       result.className = `compatibility-result ${compatibility}`;
       result.innerHTML = compatibility === 'compatible'
         ? '<i data-lucide="shield-check"></i><span>协议兼容，可以连接。</span>'
         : compatibility === 'incompatible'
-          ? '<i data-lucide="triangle-alert"></i><span>协议级别不同，连接已阻止。</span>'
+          ? '<i data-lucide="triangle-alert"></i><span>上次握手的协议不同，请重新发现后确认。</span>'
           : '<i data-lucide="circle-help"></i><span>首次连接时将验证接收端协议。</span>';
       $('#version-warning').classList.toggle('show', compatibility === 'incompatible');
       $('#version-warning-text').textContent = compatibility === 'incompatible'
-        ? `对端协议 ${receiverProtocol} 与本机协议 ${senderProtocol} 不匹配。更新对端后才能连接。`
+        ? `上次记录的对端协议 ${receiverProtocol} 与本机协议 ${senderProtocol} 不匹配。点击“重新发现”会发起真实握手；连接时也会再次验证。`
         : '';
     }
     function selectDevice(id, announce) {
@@ -765,7 +765,6 @@
       const device = selected();
       if (showingLocal && localRole === 'host') { showToast('请先在左侧选择显示器'); return; }
       if (!device.id) { showToast('请先添加对端设备'); return; }
-      if (compatibilityFor(device) === 'incompatible') { openVersionModal(); return; }
       showToast(connectedId === device.id ? '正在停止显示会话' : '正在发起真实雷雳连接');
     }
     function requestRole(role) {
@@ -840,7 +839,7 @@
     $('#hero-version').addEventListener('click', openVersionModal);
     $('#open-version-warning').addEventListener('click', openVersionModal);
     $('#version-close').addEventListener('click', () => closeModal('version-modal'));
-    $('#version-refresh').addEventListener('click', () => { showToast(`已重新发现 ${selected().name} 的版本信息`); });
+    $('#version-refresh').addEventListener('click', () => { showToast(`正在验证 ${selected().name} 的实际版本`); });
     $('#device-actions').addEventListener('click', () => {
       const menu = $('#device-menu');
       const visible = menu.classList.toggle('show');

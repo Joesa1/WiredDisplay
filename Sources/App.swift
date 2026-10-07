@@ -401,6 +401,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
               post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), address: device.ip || '', code: device.pairingCode || '', transmissionMode: document.getElementById('transmission-mode').value, resolution: document.getElementById('stream-resolution').value });
+            } else if (button.id === 'version-refresh') {
+              event.preventDefault(); event.stopImmediatePropagation();
+              const device = selectedDevice();
+              post('test', { address: device.ip || '', code: device.pairingCode || '' });
             } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
               const device = selectedDevice();
               post('test', { address: device.ip || '', code: device.pairingCode || '' });
