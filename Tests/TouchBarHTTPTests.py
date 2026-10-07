@@ -8,6 +8,7 @@ import sys
 import socket
 import time
 import urllib.parse
+import re
 
 root = pathlib.Path(__file__).resolve().parents[1]
 executable = root / 'build' / 'TouchBarServiceTests'
@@ -16,6 +17,7 @@ subprocess.run(['xcrun', 'swiftc', '-swift-version', '5', str(root / 'Sources/To
 process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
 try:
     status = json.loads(process.stdout.readline())
+    assert re.fullmatch(r'[0-9]{6}', status['code'])
     port = urllib.parse.urlparse(status['url']).port
     host = f'127.0.0.1:{port}'
     def request(path, body=None, headers=None, method=None):
@@ -61,6 +63,7 @@ try:
     assert request('/api/pair', {'code': status['code']})[0] == 429
     process.stdin.write('reset\n'); process.stdin.flush()
     renewed = json.loads(process.stdout.readline())
+    assert re.fullmatch(r'[0-9]{6}', renewed['code'])
     assert renewed['code'] != status['code']
     assert request('/api/state', headers=auth)[0] == 401
     process.stdin.write('disable\n'); process.stdin.flush()

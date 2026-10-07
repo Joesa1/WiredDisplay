@@ -59,11 +59,20 @@ final class TouchBarService {
             message = "手机与 Mac 连接同一局域网，扫码后输入配对码。HTTP 不加密。"
         } catch { candidate.stop(); message = "无法开启服务：\(error.localizedDescription)" }
     }
-    private func revoke() { generation = UUID(); tokens.removeAll(); code = Self.random(6); attempts.removeAll() }
+    private func revoke() { generation = UUID(); tokens.removeAll(); code = Self.pairingCode(); attempts.removeAll() }
     private static func random(_ count: Int) -> String {
         var bytes = [UInt8](repeating: 0, count: count)
         guard SecRandomCopyBytes(kSecRandomDefault, count, &bytes) == errSecSuccess else { fatalError("Secure randomness unavailable") }
         return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+    private static func pairingCode() -> String {
+        var code = ""
+        while code.count < 6 {
+            var byte: UInt8 = 0
+            guard SecRandomCopyBytes(kSecRandomDefault, 1, &byte) == errSecSuccess else { fatalError("Secure randomness unavailable") }
+            if byte < 250 { code.append(String(byte % 10)) }
+        }
+        return code
     }
     private func publish() {
         var status: [String: Any] = ["enabled": server != nil, "addresses": addresses.map { "http://\($0):\(port)" }, "url": url, "code": code, "config": config, "message": message]

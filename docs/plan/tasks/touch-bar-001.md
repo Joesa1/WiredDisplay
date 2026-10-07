@@ -1,7 +1,7 @@
 ---
 id: touch-bar-001
 scope: local mobile Touch Bar
-status: in-progress
+status: done
 depends-on: []
 ---
 
