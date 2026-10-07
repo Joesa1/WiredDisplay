@@ -34,3 +34,7 @@
 4. 修改 HTML、`WKWebView` bridge 或页面状态，更新 [ui](ui/README.md)。
 5. 修改构建、签名、版本或发布包，更新 [build and release](operations/build-release.md)。
 6. 新的真实设备结论写入 [validation](operations/validation.md)，并标明设备、版本、线材、步骤和结果。
+
+## Touch Bar 开发功能
+
+新增 [手机 Touch Bar](architecture/touch-bar.md)：通过独立局域网 HTTP 服务访问控制面板，入口位于工具区。雷雳仍是视频／音频传输路径；手机控制服务不承担屏幕视频传输。此功能在 PR 分支中开发，不代表当前公开安装包已经包含。
