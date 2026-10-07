@@ -10,3 +10,5 @@
 | `hardware-e2e-001` | P1 | 形成当前版本双机验收记录 | 覆盖 M1 iMac、2017 Intel iMac、扩展、镜像、音频、睡眠、两种架构。 |
 | `transport-report-001` | P2 | 取消对英文 `system_profiler` 文本的脆弱依赖 | 中英文系统均可明确报告“已知”或“未知”，不伪造线材信息。 |
 | `release-automation-001` | P2 | 追加可重复的发布校验/上传流程 | 新 tag 自动校验版本、两架构 ZIP、哈希和 Release assets。 |
+| `protocol-teardown-001` | P3 | 决定并实现常规断开的优雅结束语义 | 若选择 `end` 作为必经路径，手动断开会发送它，并补齐互操作与资源释放测试。 |
+| `discovery-refresh-001` | P3 | 定义刷新发现的真实行为 | 若产品要求手动重启 Bonjour 浏览，刷新动作显式重启并反馈结果；否则保持当前只刷新本机网桥状态的行为。 |

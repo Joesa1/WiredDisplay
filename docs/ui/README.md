@@ -89,7 +89,7 @@ saved device
 | `device` | `address`, `code` | 校验地址、保存首次 endpoint/凭据。 |
 | `session` | `role`, `address`, `code`, `output`, `audio`, `preventSleep` | 开始/停止主机或显示器会话。 |
 | `test` | `address`, `code` | 发起 probe，不启动媒体。 |
-| `refresh` | 无 | 刷新本机雷雳状态与发现。 |
+| `refresh` | 无 | 刷新本机雷雳状态；Bonjour 发现器在启动后持续运行，当前动作不直接重启它。 |
 | `role` | `role` | 释放当前会话后切换角色。 |
 | `preventSleep` | `role`, `enabled` | 更新主机要求或显示器本地息屏偏好。 |
 | `preference` | `key`, `enabled` | 保存原生偏好。 |
