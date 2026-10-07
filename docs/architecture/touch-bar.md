@@ -70,3 +70,7 @@ Volume: CoreAudio default output device, query property existence/settable; hand
 ## Verification gates
 
 Compile/package arm64 and x86_64 with existing deployment target. Retain current display transport checks. HTTP integration checks must verify pair success/failure/rate limit, auth, revocation, host/origin rejection, malformed/oversized payloads, unknown commands and shutdown. Provider tests cover schema adaptation, invalid values, disabled widgets and stale responses without executing destructive controls. Browser checks cover initial pairing, real-state rendering, unauthorized reconnect, action feedback, all widgets off, safe text rendering, mobile landscape layouts and desktop navigation. Record actual local tests separately from real iPhone/Intel/display hardware checks.
+
+### Integration refinements
+
+Music snapshots may include `permissionRequired: true` when the selected player is running but Automation permission is absent. Only the explicit “授权并播放” action remains available in that state; passive refresh never prompts. Successful authorization is followed by a real metadata refresh. The initial HTTP implementation uses pinned SwiftNIO through a small static-library package so request bounds/timeouts do not depend on a handwritten HTTP parser. Native URL ordering prefers the primary network interface and exposes alternate interface URLs when routing differs.
