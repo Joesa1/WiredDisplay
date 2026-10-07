@@ -10,7 +10,7 @@ Thunder Display 将一台 Mac 的桌面画面经雷雳网桥传到另一台 Mac�
              Host Mac                                  Display Mac
 ┌────────────────────────────────────┐     TCP     ┌────────────────────────────────────┐
 │ AppDelegate                         │────────────>│ AppDelegate                         │
-│  ├─ ScreenSender                    │ Wire v2     │  ├─ ReceiveSession                  │
+│  ├─ ScreenSender                    │ Wire v3     │  ├─ ReceiveSession                  │
 │  │   └─ ScreenCaptureKit            │             │  │   ├─ HardwareDecoder              │
 │  │       + VideoToolbox encoder     │             │  │   └─ AudioRenderer                 │
 │  └─ CablePeer                       │             │  ├─ CableListener                   │

@@ -2,6 +2,8 @@
 
 状态：当前 `build.sh` 基线。
 
+0.7.0 开发包使用协议 3，需两端同时升级，尚未发布。新增随包的 `apple-thunderbolt-display-catalog.json`，供内建屏面板尺寸适配使用。构建通过不等于双机显示、Intel 运行时或原生分辨率性能验收通过。
+
 ## 输入与产物
 
 `./build.sh` 用当前 macOS SDK 分别编译 `arm64-apple-macos12.3` 和 `x86_64-apple-macos12.3`，并输出：

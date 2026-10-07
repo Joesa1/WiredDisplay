@@ -10,7 +10,25 @@
 | 构建脚本 | `build.sh` | arm64/x86_64 编译、包结构、ad-hoc 签名 | 在 Intel、M 系列或另一台 Mac 上的运行时行为。 |
 | HTML/bridge 静态检查 | 代码审阅 | 动作名和 DOM 状态的完整性 | 原生回调、系统权限或真实设备状态。 |
 
-`Tests/ReceiverCheck.py` 仍按协议 1 / app `0.2.0` 构造握手，与协议 2 不兼容。它是历史脚本，当前不得作为通过条件。恢复为现行测试前，必须先更新其握手、身份字段、错误断言和协议版本。
+`Tests/ReceiverCheck.py` 仍按协议 1 / app `0.2.0` 构造握手，与协议 3 不兼容。它是历史脚本，当前不得作为通过条件。恢复为现行测试前，必须先更新其握手、身份字段、错误断言和协议版本。
+
+## 0.7.0 模式检查
+
+```sh
+xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h \
+  Sources/Wire.swift Sources/Cable.swift Sources/Video.swift Tests/VideoModesCheck.swift \
+  -o /private/tmp/thunder-video-modes-check -framework AppKit -framework ScreenCaptureKit \
+  -framework VideoToolbox -framework AVFoundation -framework Network -framework SystemConfiguration
+/private/tmp/thunder-video-modes-check
+# Requires existing Screen Recording permission; captures the primary screen to local loopback only.
+/private/tmp/thunder-video-modes-check --capture
+```
+
+覆盖不同面板尺寸、外接屏不套用本机目录、4K 缩放比例、非法配置、行填充处理、4.5K RGB 逐字节往返、P3 附件、截断和超长原始帧拒绝、本机硬件 Main10 编解码。`TransportCheck` 另验证超过旧 16 MiB 限制的 4.5K 帧 TCP 传输。
+
+双机验收仍需对每种模式分别验证扩展/镜像、首帧/重连/睡眠、鼠标与音频、4K/4.5K/5K 和 Intel 接收。使用同一暗色半透明窗口、灰阶渐变与彩色细线比较，记录真实帧率、吞吐、温度、延迟与色差；不能由本机编译或回环测试宣称照片中的问题已解决。
+
+2026-10-07 本地结果：默认 VideoModesCheck、TransportCheck、arm64/x86_64 构建和签名校验通过。可选 --capture 未通过：命令行创建虚拟屏返回空；改为主屏镜像后 ScreenCaptureKit 启动但在十秒内未收到首帧（低延迟档即超时），尚不能定位是当前测试环境或采集运行时问题，未验证三档完整采集链路。浏览器拒绝 file URL，界面仅完成脚本语法检查，未完成视觉/交互验收。
 
 ## 双机验收矩阵
 

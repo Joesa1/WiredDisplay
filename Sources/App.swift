@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private let addressField = NSTextField()
     private let codeField = NSTextField()
     private let quality = NSSegmentedControl(labels: ["原生 Retina", "4K 流畅"], trackingMode: .selectOne, target: nil, action: nil)
+    private var transmissionMode = TransmissionMode(rawValue: UserDefaults.standard.string(forKey: "transmissionMode") ?? "") ?? .lowLatency
     private var sendButton: NSButton!
     private var testButton: NSButton!
     private let discovery = CableDiscovery()
@@ -399,7 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if (button.id === 'toolbar-connect') {
               event.preventDefault(); event.stopImmediatePropagation();
               const device = selectedDevice();
-              post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), address: device.ip || '', code: device.pairingCode || '' });
+              post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), address: device.ip || '', code: device.pairingCode || '', transmissionMode: document.getElementById('transmission-mode').value, resolution: document.getElementById('stream-resolution').value });
             } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
               const device = selectedDevice();
               post('test', { address: device.ip || '', code: device.pairingCode || '' });
@@ -546,6 +547,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             mirrorRequested = body["output"] as? String == "mirror"
             audioRequested = body["audio"] as? Bool ?? true
             remoteSleepRequested = body["preventSleep"] as? Bool ?? true
+            guard let mode = TransmissionMode(rawValue: body["transmissionMode"] as? String ?? "") else {
+                prototypeToast("请选择有效的传输模式"); return
+            }
+            transmissionMode = mode
+            UserDefaults.standard.set(mode.rawValue, forKey: "transmissionMode")
+            quality.selectedSegment = body["resolution"] as? String == "compatible" ? 1 : 0
             startConnection(probe: false)
         case "preference":
             if let key = body["key"] as? String, ["autoReconnect", "menuBarStatus"].contains(key), let enabled = body["enabled"] as? Bool {
@@ -810,6 +817,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 
     private func setBusy(_ busy: Bool) {
+        webView?.evaluateJavaScript("window.__transmissionBusy = \(busy ? "true" : "false"); if (typeof renderDetail === 'function') renderDetail();", completionHandler: nil)
         sendButton?.isEnabled = !busy
         testButton?.isEnabled = !busy
         receiveButton?.isEnabled = !busy
@@ -933,20 +941,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         let width = native?.pixelWidth ?? CGDisplayPixelsWide(id)
         let height = native?.pixelHeight ?? CGDisplayPixelsHigh(id)
         let hiDPI = screen.backingScaleFactor > 1
-        // 2240x1260 is the M1 iMac's logical desktop size. It still needs a
-        // 4480x2520 backing stream to remain sharp on the 5K Retina panel.
-        if width > 3840 && height > 2160 && hiDPI {
-            return DisplayProfile(width: 4480, height: 2520, hiDPI: true,
-                                  hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                                  appVersion: Wire.appVersion, identity: localIdentity, receiverCode: localPairingCode)
-        } else if width >= 2500 && width <= 3200 && height >= 1400 && height <= 1800 {
-            return DisplayProfile(width: 2560, height: 1440, hiDPI: false,
-                                  hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                                  appVersion: Wire.appVersion, identity: localIdentity, receiverCode: localPairingCode)
-        }
-        return DisplayProfile(width: width, height: height, hiDPI: hiDPI,
+        // Catalog dimensions describe built-in physical panels, not external monitors
+        // or supersampled display modes. Unknown panels retain runtime geometry.
+        let catalog = Bundle.main.url(forResource: "apple-thunderbolt-display-catalog", withExtension: "json")
+            .flatMap { try? Data(contentsOf: $0) }
+            .flatMap { try? JSONDecoder().decode(PanelCatalog.self, from: $0) }
+        let pixels = catalog?.nativePixels(model: localIdentity.model, builtIn: CGDisplayIsBuiltin(id) != 0)
+        var result = DisplayProfile(width: pixels?.width ?? width, height: pixels?.height ?? height, hiDPI: hiDPI,
                               hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                               appVersion: Wire.appVersion, identity: localIdentity, receiverCode: localPairingCode)
+        result.wideGamut = screen.colorSpace?.cgColorSpace?.isWideGamutRGB ?? false
+        return result
     }
 
     private func accept(_ accepted: CablePeer, code: String) {
@@ -959,7 +964,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if self.receiveSession === session { self.surface.offer(image, sequence: sequence) }
             self.receiveLock.unlock()
         }
-        session.decoder.onFailure = { [weak accepted] _ in accepted?.stop() }
+        session.decoder.onFailure = { [weak accepted] reason in
+            accepted?.send(.end, Data(reason.utf8)) { accepted?.stop() }
+        }
         accepted.onPacket = { [weak self, weak accepted] kind, data in
             guard let self, let accepted else { return }
             self.receiveLock.lock(); session.lastSeen = DispatchTime.now().uptimeNanoseconds; self.receiveLock.unlock()
@@ -1014,7 +1021,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 guard !session.configured else { throw WireError.invalid("重复视频配置") }
                 let config = try Wire.decode(VideoConfiguration.self, data)
                 guard config.width <= profile.width, config.height <= profile.height else { throw WireError.invalid("视频超过接收屏幕尺寸") }
-                try session.decoder.configure(config)
+                do { try session.decoder.configure(config) }
+                catch {
+                    accepted.send(.end, Data(error.localizedDescription.utf8)) { accepted.stop() }
+                    return
+                }
                 session.configured = true
             case .video:
                 guard session.configured else { throw WireError.invalid("未配置解码器") }
@@ -1103,6 +1114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         sessionID = UUID()
         let generation = sessionID
         let limited = quality.selectedSegment == 1
+        let transmissionMode = self.transmissionMode
         connecting = true
         setBusy(true)
         diagnosticLines.removeAll()
@@ -1171,7 +1183,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                     }
                                 }
                                 do {
-                                    try await sender.start(profile: selected, mirror: self.mirrorRequested, audio: self.audioRequested)
+                                    self.record("传输模式：\(transmissionMode.rawValue) · \(selected.width) × \(selected.height) · 面板色域：\(selected.wideGamut ? "广色域" : "标准色域")")
+                                    try await sender.start(profile: selected, mirror: self.mirrorRequested, audio: self.audioRequested, mode: transmissionMode)
                                     guard self.sessionID == generation else { await sender.stop(); return }
                                     self.statusLabel.stringValue = "已扩展 · \(selected.logicalWidth) × \(selected.logicalHeight)\(selected.hiDPI ? " Retina" : "") · 60 帧目标\n在系统设置 → 显示器中调整屏幕排列。"
                                 } catch {

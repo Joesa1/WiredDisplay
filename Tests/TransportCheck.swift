@@ -17,6 +17,12 @@ import Darwin
             let peer = CablePeer(connection: connection, cable: loopback)
             peers.append(peer)
             peer.onPacket = { kind, data in
+                if kind == .video {
+                    precondition(data.count == 8 + 4480 * 2520 * 4)
+                    precondition(data.first == 91 && data.last == 91)
+                    received.signal()
+                    return
+                }
                 precondition(kind == .hello)
                 let hello = try Wire.decode(Hello.self, data)
                 precondition(hello.code == "123456" && hello.probe == true)
@@ -45,7 +51,12 @@ import Darwin
         }
         func write(_ fd: Int32, _ data: Data) {
             data.withUnsafeBytes { raw in
-                precondition(Darwin.send(fd, raw.baseAddress, raw.count, 0) == raw.count)
+                var offset = 0
+                while offset < raw.count {
+                    let sent = Darwin.send(fd, raw.baseAddress!.advanced(by: offset), raw.count - offset, 0)
+                    precondition(sent > 0)
+                    offset += sent
+                }
             }
         }
         let payload = try Wire.json(Hello(version: Wire.protocolVersion, code: "123456", probe: true))
@@ -65,6 +76,10 @@ import Darwin
         precondition(received.wait(timeout: .now() + 3) == .success)
         write(fd, frame + frame)
         for _ in 0..<2 { precondition(received.wait(timeout: .now() + 3) == .success) }
+        // A native 4.5K BGRA frame exceeds the old 16 MiB framing limit.
+        let raw = Data(repeating: 91, count: 8 + 4480 * 2520 * 4)
+        write(fd, Wire.header(.video, count: raw.count) + raw)
+        precondition(received.wait(timeout: .now() + 10) == .success)
         Darwin.close(fd)
         precondition(closed.wait(timeout: .now() + 3) == .success)
         let bad = client()
@@ -80,6 +95,6 @@ import Darwin
         for peer in peers { peer.stop(); peer.stop() }
         precondition(closed.wait(timeout: .now() + 0.2) == .timedOut)
         listener.cancel()
-        print("PASS: fragmented/coalesced frames, oversized frame rejection, reconnect, idempotent close")
+        print("PASS: fragmented/coalesced frames, 4.5K raw framing, oversized frame rejection, reconnect, idempotent close")
     }
 }
