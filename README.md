@@ -2,13 +2,13 @@
 
 通过一根雷雳 3 或更新的数据线，将一台 Mac 的桌面扩展或镜像到另一台 Mac。
 
-同一个应用同时包含两种角色：主机负责创建或采集桌面并编码发送；显示器负责接收、解码和全屏显示。应用不需要账号或订阅，也不使用 Duet 的私有协议。
+同一个应用同时包含两种角色：主机负责创建或采集桌面并编码发送；显示器负责接收、解码和全屏显示。应用不需要账号或订阅。
 
 ## 下载
 
-最新公开版本：[Thunder Display 0.6.4](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.6.4)。当前开发基线为 `0.6.5 (18)`。
+当前版本：[Thunder Display 0.6.5](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.6.5)。
 
-请在**两台 Mac 同时安装 0.6.4**。本版本使用通信协议 2，不能与协议 1 的旧版互连。
+请在**两台 Mac 同时安装 0.6.5**。本版本使用通信协议 2，不能与协议 1 的旧版互连。
 
 | Mac 芯片 | 下载包 |
 | --- | --- |
@@ -80,7 +80,7 @@ macOS 没有提供通用公开接口来识别每根雷雳线是否为主动线�
 | 未发现雷雳网桥 | 检查线材、端口、雷雳网桥是否启用以及两端 IPv4 设置。 |
 | `localNetworkDenied` | 在“系统设置 > 隐私与安全性 > 本地网络”允许 Thunder Display。 |
 | TCP 等待或超时 | 确认显示器端正在监听，地址在同一子网，且本地网络权限已允许。 |
-| 配对或协议被拒绝 | 使用显示器当前显示的六码；确认两端都安装 0.6.4。 |
+| 配对或协议被拒绝 | 使用显示器当前显示的六码；确认两端都安装 0.6.5。 |
 | 检测通过但无法开始画面 | 检查主机“屏幕录制”权限、虚拟显示器创建和硬件编码器。 |
 | 字体模糊或比例异常 | 选择与 iMac 对应的分辨率，并在主机“显示器 > 排列”中确认虚拟显示器模式。 |
 
@@ -108,7 +108,3 @@ xcrun swiftc -swift-version 5 Sources/Cable.swift Sources/Wire.swift \
 ```
 
 构建产物和 SHA-256 校验文件位于 `dist/`。默认使用临时目录进行 ad-hoc 签名；如需使用 Apple 签名证书，可设置 `WIRED_SIGN_IDENTITY`。
-
-## 说明
-
-Thunder Display 是独立实现。我们没有确认 Duet 的私有传输细节，也没有声明已达到 Duet 的延迟水平。TargetBridge 的 MIT 许可说明保留在 [LICENSE-TargetBridge.txt](LICENSE-TargetBridge.txt)。
