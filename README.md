@@ -6,7 +6,7 @@
 
 ## 下载
 
-当前版本：[Thunder Display 0.6.4](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.6.4)
+最新公开版本：[Thunder Display 0.6.4](https://github.com/Joesa1/WiredDisplay/releases/tag/v0.6.4)。当前开发基线为 `0.6.5 (18)`。
 
 请在**两台 Mac 同时安装 0.6.4**。本版本使用通信协议 2，不能与协议 1 的旧版互连。
 

@@ -13,7 +13,7 @@
 | `dist/SHA256SUMS.txt` | 两个 ZIP 的 SHA-256 清单。 |
 | `dist/Thunder Display.app` | 仅本地检查副本；脚本最后循环写入 x86_64，不能当作“通用 app”发布。 |
 
-每个 app 包含可执行文件、`Info.plist`、`mvp-ui-prototype.html`、两套 PNG 图标、`AppIcon.icns` 与 `LICENSE-TargetBridge.txt`。
+每个 app 包含可执行文件、`Info.plist`、`mvp-ui-prototype.html`、两套 PNG 图标、`AppIcon.icns`、iMac 透明产品视图与 `LICENSE-TargetBridge.txt`。
 
 ## 签名边界
 

@@ -111,9 +111,10 @@
     .setup-nav { margin-top: 12px; }
     .setup-nav .nav-item { color: var(--secondary); font-size: 12px; }
     .icon-choice { display: flex; gap: 10px; }
-    .icon-choice button { padding: 7px; background: transparent; border-radius: 8px; }
+    .icon-choice button { display: grid; width: 66px; height: 66px; place-items: center; overflow: hidden; padding: 0; background: transparent; border-radius: 8px; }
     .icon-choice button.active { background: rgba(0,122,255,.12); outline: 1px solid rgba(0,122,255,.34); }
     .icon-choice img { display: block; width: 52px; height: 52px; border-radius: 12px; }
+    .icon-choice .icon-two-preview { width: 82px; height: 82px; border-radius: 0; }
     .version-status { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; width: 100%; padding: 9px 10px; color: var(--ink); background: rgba(118,118,128,.08); border-radius: 7px; text-align: left; }
     .version-status:hover { background: rgba(118,118,128,.14); }
     .version-status span { display: block; grid-column: 1; }
@@ -175,8 +176,13 @@
       border-radius: 11px;
       box-shadow: 0 1px 1px rgba(0,0,0,.03), 0 11px 27px rgba(27, 74, 126, .08);
     }
-    .session-top { display: flex; align-items: flex-start; gap: 13px; }
-    .session-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .session-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 230px); column-gap: 20px; align-items: start; }
+    .session-top.no-product { grid-template-columns: minmax(0, 1fr); }
+    .session-summary { display: flex; min-width: 0; align-items: flex-start; gap: 13px; }
+    .session-actions { display: flex; grid-column: 1; align-items: center; gap: 8px; margin: 13px 0 0 55px; }
+    .device-product-view { display: grid; grid-column: 2; grid-row: 1 / span 2; min-height: 118px; place-items: center; }
+    .device-product-view[hidden] { display: none; }
+    .device-product-view img { display: block; width: min(100%, 220px); max-height: 140px; object-fit: contain; filter: drop-shadow(0 11px 12px rgba(35,62,90,.12)); }
     .role-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; margin-top: 18px; border-top: 1px solid var(--separator); }
     .role-copy small { display: block; margin-bottom: 3px; color: var(--secondary); font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
     .role-copy strong { font-size: 13px; font-weight: 600; }
@@ -214,6 +220,12 @@
     .identity-fact + .identity-fact { padding-left: 14px; border-left: 1px solid var(--separator); }
     .identity-fact span { display: block; margin-bottom: 4px; color: var(--secondary); font-size: 10px; font-weight: 600; }
     .identity-fact strong { display: block; overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .identity-fact .model-code { display: inline-block; margin-top: 5px; padding: 2px 5px; color: #4b4b50; background: rgba(118,118,128,.1); border-radius: 4px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .hardware-panel { display: flex; align-items: center; gap: 9px; padding: 12px 0; margin-top: 15px; border-top: 1px solid var(--separator); }
+    .hardware-panel > i { width: 19px; height: 19px; color: var(--blue); }
+    .hardware-panel small { display: block; color: var(--secondary); font-size: 10px; font-weight: 600; }
+    .hardware-panel strong { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; }
+    .hardware-panel .retina-chip { margin-left: auto; padding: 4px 7px; color: #16823c; background: rgba(52,199,89,.11); border-radius: 99px; font-size: 10px; font-weight: 650; }
     .connection-pill {
       display: inline-flex;
       align-items: center;
@@ -403,22 +415,26 @@
       <section class="page active" id="current-device" aria-labelledby="hero-device-name">
         <div class="section">
           <div class="session-hero" id="session-hero">
-            <div class="session-top">
-              <div class="device-avatar"><i data-lucide="monitor-up"></i></div>
-              <div class="session-copy"><h3 id="hero-device-name">iMac 5K</h3><p id="hero-device-detail">Thunderbolt Bridge · 169.254.44.2 · 配对凭据已保存</p></div>
+            <div class="session-top" id="session-top">
+              <div class="session-summary">
+                <div class="device-avatar" id="hero-device-avatar"><i data-lucide="monitor-up"></i></div>
+                <div class="session-copy"><h3 id="hero-device-name">iMac 5K</h3><p id="hero-device-detail">Thunderbolt Bridge · 169.254.44.2 · 配对凭据已保存</p></div>
+              </div>
               <div class="session-actions">
                 <button class="version-chip" id="hero-version" aria-label="查看版本兼容性"><i data-lucide="shield-check"></i><span id="hero-version-text">版本已兼容</span></button>
                 <span class="connection-pill" id="connection-pill"><i></i><span>正在连接</span></span>
                 <button class="icon-button" id="device-actions" aria-label="设备选项" title="设备选项" aria-expanded="false"><i data-lucide="ellipsis"></i></button>
               </div>
+              <div class="device-product-view" id="device-product-view" hidden><img id="device-product-image" alt=""></div>
             </div>
             <div class="device-menu" id="device-menu"><button id="forget-device"><i data-lucide="trash-2"></i>忘记此设备</button></div>
             <div class="version-warning" id="version-warning"><i data-lucide="triangle-alert"></i><span id="version-warning-text"></span><button class="text-action" id="open-version-warning">查看版本</button></div>
             <div class="identity-grid" aria-label="对端设备身份">
               <div class="identity-fact"><span>设备名称</span><strong id="identity-name">卓尔的 iMac</strong></div>
-              <div class="identity-fact"><span>设备型号</span><strong id="identity-model">iMac (Retina 5K, 27-inch, 2020)</strong></div>
+              <div class="identity-fact"><span>设备型号</span><strong id="identity-model">iMac (Retina 5K, 27-inch, 2020)</strong><code class="model-code" id="identity-model-code">iMac20,1</code></div>
               <div class="identity-fact"><span>系统版本</span><strong id="identity-system">macOS 15.3.2</strong></div>
             </div>
+            <div class="hardware-panel" id="hardware-panel"><i data-lucide="panel-top"></i><div><small>物理面板</small><strong id="identity-panel">型号资料待发现</strong></div><span class="retina-chip" id="identity-scale" hidden></span></div>
             <div class="role-bar">
               <div class="role-copy"><small>本机角色</small><strong id="role-description">这台 Mac 正在作为主机</strong></div>
               <div class="segmented-control" role="group" aria-label="本机角色">
@@ -474,7 +490,7 @@
       <section class="page" id="settings">
         <div class="page-head"><div><h2>偏好设置</h2><p>将少量全局选择放在这里，连接相关选项留在设备详情内。</p></div></div>
         <div class="section"><h3>连接</h3><div class="preference-group"><div class="preference-row"><div><strong>唤醒后自动重连</strong><p>恢复此前正在使用的设备。</p></div><button class="switch on" data-setting="autoReconnect" aria-label="切换唤醒后自动重连"></button></div><div class="preference-row"><div><strong>显示菜单栏状态</strong><p>在菜单栏显示活动会话。</p></div><button class="switch on" data-setting="menuBarStatus" aria-label="切换菜单栏状态"></button></div></div></div>
-        <div class="section"><h3>应用图标</h3><div class="preference-group"><div class="preference-row"><div><strong>Dock 图标</strong><p>切换后立即用于正在运行的应用。</p></div><div class="icon-choice"><button data-app-icon="one" class="active" aria-label="选择闪电显示器图标"><img src="IconOne.png" alt="闪电显示器图标"></button><button data-app-icon="two" aria-label="选择雷雳线图标"><img src="IconTwo.png" alt="雷雳线图标"></button></div></div></div></div>
+        <div class="section"><h3>应用图标</h3><div class="preference-group"><div class="preference-row"><div><strong>Dock 图标</strong><p>切换后立即用于正在运行的应用。</p></div><div class="icon-choice"><button data-app-icon="one" class="active" aria-label="选择闪电显示器图标"><img src="IconOne.png" alt="闪电显示器图标"></button><button data-app-icon="two" aria-label="选择雷雳线图标"><img class="icon-two-preview" src="IconTwo.png" alt="雷雳线图标"></button></div></div></div></div>
         <div class="section"><h3>诊断</h3><div class="preference-group"><div class="preference-row"><div><strong>连接前检查配置</strong><p>连接前检查屏幕录制、网络路径和所需权限。</p></div><button class="switch on" data-setting="preflight" aria-label="切换连接前检查"></button></div><div class="preference-row"><div><strong>保留最近检测</strong><p>为每台设备显示最近一次有效吞吐结果。</p></div><button class="switch on" data-setting="keepDiagnostics" aria-label="切换保留检测"></button></div></div><button class="text-action" id="reset-settings">恢复默认设置</button></div>
       </section>
     </main>
@@ -520,6 +536,44 @@
     let toastTimer;
 
     const $ = (selector) => document.querySelector(selector);
+    const iMacProfiles = {
+      'iMac12,1': ['iMac 21.5 英寸，2011 年中', '1920 × 1080', 1], 'iMac12,2': ['iMac 27 英寸，2011 年中', '2560 × 1440', 1],
+      'iMac13,1': ['iMac 21.5 英寸，2012 年末', '1920 × 1080', 1], 'iMac13,2': ['iMac 27 英寸，2012 年末', '2560 × 1440', 1],
+      'iMac14,1': ['iMac 21.5 英寸，2013 年末', '1920 × 1080', 1], 'iMac14,2': ['iMac 27 英寸，2013 年末', '2560 × 1440', 1], 'iMac14,4': ['iMac 21.5 英寸，2014 年中', '1920 × 1080', 1],
+      'iMac15,1': ['iMac 27 英寸 Retina 5K，2014 年末或 2015 年中', '5120 × 2880', 2], 'iMac16,1': ['iMac 21.5 英寸，2015 年末', '1920 × 1080', 1],
+      'iMac16,2': ['iMac 21.5 英寸 Retina 4K，2015 年末', '4096 × 2304', 2], 'iMac17,1': ['iMac 27 英寸 Retina 5K，2015 年末', '5120 × 2880', 2],
+      'iMac18,1': ['iMac 21.5 英寸，2017 年', '1920 × 1080', 1], 'iMac18,2': ['iMac 21.5 英寸 Retina 4K，2017 年', '4096 × 2304', 2], 'iMac18,3': ['iMac 27 英寸 Retina 5K，2017 年', '5120 × 2880', 2],
+      'iMac19,1': ['iMac 27 英寸 Retina 5K，2019 年', '5120 × 2880', 2], 'iMac19,2': ['iMac 21.5 英寸 Retina 4K，2019 年', '4096 × 2304', 2],
+      'iMac20,1': ['iMac 27 英寸 Retina 5K，2020 年', '5120 × 2880', 2], 'iMac20,2': ['iMac 27 英寸 Retina 5K，2020 年', '5120 × 2880', 2], 'iMacPro1,1': ['iMac Pro，2017 年', '5120 × 2880', 2],
+      'iMac21,1': ['iMac 24 英寸 M1，2021 年，四接口', '4480 × 2520', 2], 'iMac21,2': ['iMac 24 英寸 M1，2021 年，双接口', '4480 × 2520', 2],
+      'Mac15,4': ['iMac 24 英寸 M3，2023 年，双接口', '4480 × 2520', 2], 'Mac15,5': ['iMac 24 英寸 M3，2023 年，四接口', '4480 × 2520', 2],
+      'Mac16,2': ['iMac 24 英寸 M4，2024 年，双接口', '4480 × 2520', 2], 'Mac16,3': ['iMac 24 英寸 M4，2024 年，四接口', '4480 × 2520', 2]
+    };
+    const laptopProfiles = [
+      ['MacBookPro8,1 MacBookPro9,2', 'MacBook Pro 13 英寸', '1280 × 800', 1], ['MacBookPro8,2 MacBookPro9,1', 'MacBook Pro 15 英寸', '1440 × 900', 1], ['MacBookPro8,3', 'MacBook Pro 17 英寸', '1920 × 1200', 1],
+      ['MacBookPro10,2 MacBookPro11,1 MacBookPro12,1 MacBookPro13,1 MacBookPro13,2 MacBookPro14,1 MacBookPro14,2 MacBookPro15,2 MacBookPro15,4 MacBookPro16,2 MacBookPro16,3 MacBookPro17,1 Mac14,7', 'MacBook Pro 13 英寸 Retina', '2560 × 1600', 2],
+      ['MacBookPro10,1 MacBookPro11,2 MacBookPro11,3 MacBookPro11,4 MacBookPro11,5 MacBookPro13,3 MacBookPro14,3 MacBookPro15,1 MacBookPro15,3', 'MacBook Pro 15 英寸 Retina', '2880 × 1800', 2], ['MacBookPro16,1 MacBookPro16,4', 'MacBook Pro 16 英寸', '3072 × 1920', 2],
+      ['MacBookPro18,3 MacBookPro18,4 Mac14,5 Mac14,9 Mac15,3 Mac15,6 Mac15,8 Mac15,10 Mac16,1 Mac16,6 Mac16,8 Mac17,2 Mac17,7 Mac17,9', 'MacBook Pro 14 英寸 Liquid Retina XDR', '3024 × 1964', 2],
+      ['MacBookPro18,1 MacBookPro18,2 Mac14,6 Mac14,10 Mac15,7 Mac15,9 Mac15,11 Mac16,5 Mac16,7 Mac17,6 Mac17,8', 'MacBook Pro 16 英寸 Liquid Retina XDR', '3456 × 2234', 2],
+      ['MacBookAir4,1 MacBookAir5,1 MacBookAir6,1 MacBookAir7,1', 'MacBook Air 11 英寸', '1366 × 768', 1], ['MacBookAir4,2 MacBookAir5,2 MacBookAir6,2 MacBookAir7,2', 'MacBook Air 13 英寸', '1440 × 900', 1],
+      ['MacBookAir8,1 MacBookAir8,2 MacBookAir9,1 MacBookAir10,1', 'MacBook Air 13 英寸 Retina', '2560 × 1600', 2], ['Mac14,2 Mac15,12 Mac16,12 Mac17,3', 'MacBook Air 13 英寸 Liquid Retina', '2560 × 1664', 2], ['Mac14,15 Mac15,13 Mac16,13 Mac17,4', 'MacBook Air 15 英寸 Liquid Retina', '2880 × 1864', 2]
+    ].map(([models, name, panel, scale]) => ({ models: models.split(' '), name, panel, scale }));
+    const macOSNames = { 10: 'Catalina', 11: 'Big Sur', 12: 'Monterey', 13: 'Ventura', 14: 'Sonoma', 15: 'Sequoia', 26: 'Tahoe' };
+    function readableSystemVersion(raw) {
+      const match = String(raw || '').match(/(?:Version\s+)?(\d+(?:\.\d+){1,2})/i);
+      if (!match) return raw || '系统版本待发现';
+      const version = match[1]; const name = macOSNames[Number(version.split('.')[0])];
+      return `macOS ${name ? `${name} ` : ''}${version}`;
+    }
+    function presentationFor(device) {
+      const model = device.model || '';
+      const iMac = iMacProfiles[model];
+      if (iMac) return { icon: 'monitor', type: '台式机', modelName: iMac[0], panel: iMac[1], scale: iMac[2], image: `DeviceAssets/Apple/iMac/transparent/${model.replace(',', '_')}.png` };
+      const laptop = laptopProfiles.find((profile) => profile.models.includes(model));
+      if (laptop) return { icon: 'laptop', type: '笔记本电脑', modelName: laptop.name, panel: laptop.panel, scale: laptop.scale, image: null };
+      const icon = /MacBook|Mac\d+,/.test(model) ? 'laptop' : 'monitor';
+      return { icon, type: icon === 'laptop' ? '笔记本电脑' : '台式机', modelName: model || '型号待发现', panel: null, scale: null, image: null };
+    }
     function selected() { return devices.find((device) => device.id === selectedId) || { id: null, name: '尚未添加设备', detail: '点击“添加设备”录入对端雷雳桥接地址和配对码', profile: '等待设备配置', icon: 'monitor-up' }; }
     function localDevice() {
       const local = window.__thunderLocal || {};
@@ -527,7 +581,7 @@
       return { id: null, name: '本机状态', detail: pairing.address ? `雷雳桥接 · ${pairing.address} · 本机配对码已生成` : '等待雷雳网桥', model: local.model || '本机型号待发现', systemVersion: local.os || '系统版本待发现', icon: 'monitor-up', local: true };
     }
     function visibleDevice() { return showingLocal ? localDevice() : selected(); }
-    function iconFor(device) { return `<i data-lucide="${device.icon}"></i>`; }
+    function iconFor(device) { return `<i data-lucide="${presentationFor(device).icon}"></i>`; }
     function statusText(device) { return device.id === connectedId ? '正在连接' : device.state === 'online' ? '可连接' : '等待设备插入'; }
     function compatibilityFor(device) {
       if (!device.protocolVersion) return 'unknown';
@@ -614,6 +668,7 @@
     }
     function renderDetail() {
       const device = visibleDevice();
+      const presentation = presentationFor(device);
       const isLocal = showingLocal;
       const isLive = !isLocal && !!device.id && device.id === connectedId;
       const compatibility = compatibilityFor(device);
@@ -622,8 +677,20 @@
       $('#hero-device-name').textContent = device.name;
       $('#hero-device-detail').textContent = device.detail;
       $('#identity-name').textContent = device.name || '名称待发现';
-      $('#identity-model').textContent = device.model || '型号待发现';
-      $('#identity-system').textContent = device.systemVersion || '系统版本待发现';
+      $('#identity-model').textContent = presentation.modelName;
+      $('#identity-model-code').textContent = device.model || '待发现';
+      $('#identity-model-code').hidden = !device.model;
+      $('#identity-system').textContent = readableSystemVersion(device.systemVersion);
+      $('#identity-panel').textContent = presentation.panel ? `${presentation.panel}${presentation.scale === 2 ? ' · Retina' : ''}` : '型号资料待发现';
+      $('#identity-scale').hidden = !presentation.scale;
+      $('#identity-scale').textContent = presentation.scale ? `${presentation.scale}x ${presentation.scale === 2 ? 'Retina' : '标准'}` : '';
+      const product = $('#device-product-view');
+      const productImage = $('#device-product-image');
+      product.hidden = !presentation.image;
+      productImage.src = presentation.image || '';
+      productImage.alt = presentation.modelName;
+      $('#session-top').classList.toggle('no-product', !presentation.image);
+      $('#hero-device-avatar').innerHTML = `<i data-lucide="${presentation.icon === 'laptop' ? 'laptop' : 'monitor-up'}"></i>`;
       $('#connection-pill').innerHTML = isLive
         ? `<i></i><span>${isHost ? '正在扩展' : '正在接收'}</span>`
         : listening ? '<i style="background: var(--orange)"></i><span>监听中</span>'
