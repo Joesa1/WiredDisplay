@@ -433,7 +433,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         config.pixelFormat = capturePixelFormat
         config.colorSpaceName = streamColorSpace == .displayP3 ? CGColorSpace.displayP3 : CGColorSpace.sRGB
         config.colorMatrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2
-        config.showsCursor = false
+        config.showsCursor = true
         config.scalesToFit = true
         config.captureResolution = .best
         config.capturesAudio = audio
