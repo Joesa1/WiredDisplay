@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "sourceCutoff": "2026-10-07",
+  "purpose": "Research-only catalog. It is not loaded by the app yet.",
+  "lookup": {
+    "primaryKey": "hw.model",
+    "runtimeAuthority": "NSScreen and CGDisplay runtime geometry override this catalog when available.",
+    "derivedLogicalRule": "The baseline logical size is nativePixels / backingScale. It is a fallback, not a forced macOS display mode."
+  },
+  "modelNames": {
+    "iMac12,1": "iMac 21.5-inch, Mid 2011",
+    "iMac12,2": "iMac 27-inch, Mid 2011",
+    "iMac13,1": "iMac 21.5-inch, Late 2012",
+    "iMac13,2": "iMac 27-inch, Late 2012",
+    "iMac14,1": "iMac 21.5-inch, Late 2013",
+    "iMac14,2": "iMac 27-inch, Late 2013",
+    "iMac14,4": "iMac 21.5-inch, Mid 2014",
+    "iMac15,1": "iMac 27-inch Retina 5K, Late 2014 or Mid 2015",
+    "iMac16,1": "iMac 21.5-inch, Late 2015",
+    "iMac16,2": "iMac 21.5-inch Retina 4K, Late 2015",
+    "iMac17,1": "iMac 27-inch Retina 5K, Late 2015",
+    "iMac18,1": "iMac 21.5-inch, 2017",
+    "iMac18,2": "iMac 21.5-inch Retina 4K, 2017",
+    "iMac18,3": "iMac 27-inch Retina 5K, 2017",
+    "iMac19,1": "iMac 27-inch Retina 5K, 2019",
+    "iMac19,2": "iMac 21.5-inch Retina 4K, 2019",
+    "iMac20,1": "iMac 27-inch Retina 5K, 2020",
+    "iMac20,2": "iMac 27-inch Retina 5K, 2020",
+    "iMacPro1,1": "iMac Pro, 2017",
+    "iMac21,1": "iMac 24-inch M1, 2021, four ports",
+    "iMac21,2": "iMac 24-inch M1, 2021, two ports",
+    "Mac15,4": "iMac 24-inch M3, 2023, two ports",
+    "Mac15,5": "iMac 24-inch M3, 2023, four ports",
+    "Mac16,2": "iMac 24-inch M4, 2024, two ports",
+    "Mac16,3": "iMac 24-inch M4, 2024, four ports"
+  },
+  "profiles": [
+    {
+      "id": "imac-21-5-fhd",
+      "family": "iMac",
+      "models": ["iMac12,1", "iMac13,1", "iMac14,1", "iMac14,4", "iMac16,1", "iMac18,1"],
+      "nativePixels": { "width": 1920, "height": 1080 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1920, "height": 1080 }
+    },
+    {
+      "id": "imac-27-qhd",
+      "family": "iMac",
+      "models": ["iMac12,2", "iMac13,2", "iMac14,2"],
+      "nativePixels": { "width": 2560, "height": 1440 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 2560, "height": 1440 }
+    },
+    {
+      "id": "imac-21-5-4k",
+      "family": "iMac",
+      "models": ["iMac16,2", "iMac18,2", "iMac19,2"],
+      "nativePixels": { "width": 4096, "height": 2304 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 2048, "height": 1152 }
+    },
+    {
+      "id": "imac-27-5k",
+      "family": "iMac",
+      "models": ["iMac15,1", "iMac17,1", "iMac18,3", "iMac19,1", "iMac20,1", "iMac20,2"],
+      "nativePixels": { "width": 5120, "height": 2880 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 2560, "height": 1440 }
+    },
+    {
+      "id": "imac-pro-5k",
+      "family": "iMac Pro",
+      "models": ["iMacPro1,1"],
+      "nativePixels": { "width": 5120, "height": 2880 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 2560, "height": 1440 }
+    },
+    {
+      "id": "imac-24-4-5k",
+      "family": "iMac",
+      "models": ["iMac21,1", "iMac21,2", "Mac15,4", "Mac15,5", "Mac16,2", "Mac16,3"],
+      "nativePixels": { "width": 4480, "height": 2520 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 2240, "height": 1260 }
+    },
+    {
+      "id": "macbook-pro-13-non-retina",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro8,1", "MacBookPro9,2"],
+      "nativePixels": { "width": 1280, "height": 800 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1280, "height": 800 }
+    },
+    {
+      "id": "macbook-pro-15-non-retina",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro8,2", "MacBookPro9,1"],
+      "nativePixels": { "width": 1440, "height": 900 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "macbook-pro-17-non-retina",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro8,3"],
+      "nativePixels": { "width": 1920, "height": 1200 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1920, "height": 1200 }
+    },
+    {
+      "id": "macbook-pro-13-retina",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro10,2", "MacBookPro11,1", "MacBookPro12,1", "MacBookPro13,1", "MacBookPro13,2", "MacBookPro14,1", "MacBookPro14,2", "MacBookPro15,2", "MacBookPro15,4", "MacBookPro16,2", "MacBookPro16,3", "MacBookPro17,1", "Mac14,7"],
+      "nativePixels": { "width": 2560, "height": 1600 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1280, "height": 800 }
+    },
+    {
+      "id": "macbook-pro-15-retina",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro10,1", "MacBookPro11,2", "MacBookPro11,3", "MacBookPro11,4", "MacBookPro11,5", "MacBookPro13,3", "MacBookPro14,3", "MacBookPro15,1", "MacBookPro15,3"],
+      "nativePixels": { "width": 2880, "height": 1800 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "macbook-pro-16-intel",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro16,1", "MacBookPro16,4"],
+      "nativePixels": { "width": 3072, "height": 1920 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1536, "height": 960 }
+    },
+    {
+      "id": "macbook-pro-14-liquid-retina-xdr",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro18,3", "MacBookPro18,4", "Mac14,5", "Mac14,9", "Mac15,3", "Mac15,6", "Mac15,8", "Mac15,10", "Mac16,1", "Mac16,6", "Mac16,8", "Mac17,2", "Mac17,7", "Mac17,9"],
+      "nativePixels": { "width": 3024, "height": 1964 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1512, "height": 982 }
+    },
+    {
+      "id": "macbook-pro-16-liquid-retina-xdr",
+      "family": "MacBook Pro",
+      "models": ["MacBookPro18,1", "MacBookPro18,2", "Mac14,6", "Mac14,10", "Mac15,7", "Mac15,9", "Mac15,11", "Mac16,5", "Mac16,7", "Mac17,6", "Mac17,8"],
+      "nativePixels": { "width": 3456, "height": 2234 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1728, "height": 1117 }
+    },
+    {
+      "id": "macbook-air-11",
+      "family": "MacBook Air",
+      "models": ["MacBookAir4,1", "MacBookAir5,1", "MacBookAir6,1", "MacBookAir7,1"],
+      "nativePixels": { "width": 1366, "height": 768 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1366, "height": 768 }
+    },
+    {
+      "id": "macbook-air-13-non-retina",
+      "family": "MacBook Air",
+      "models": ["MacBookAir4,2", "MacBookAir5,2", "MacBookAir6,2", "MacBookAir7,2"],
+      "nativePixels": { "width": 1440, "height": 900 },
+      "backingScale": 1,
+      "baselineLogicalPixels": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "macbook-air-13-retina",
+      "family": "MacBook Air",
+      "models": ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookAir10,1"],
+      "nativePixels": { "width": 2560, "height": 1600 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1280, "height": 800 }
+    },
+    {
+      "id": "macbook-air-13-liquid-retina",
+      "family": "MacBook Air",
+      "models": ["Mac14,2", "Mac15,12", "Mac16,12", "Mac17,3"],
+      "nativePixels": { "width": 2560, "height": 1664 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1280, "height": 832 }
+    },
+    {
+      "id": "macbook-air-15-liquid-retina",
+      "family": "MacBook Air",
+      "models": ["Mac14,15", "Mac15,13", "Mac16,13", "Mac17,4"],
+      "nativePixels": { "width": 2880, "height": 1864 },
+      "backingScale": 2,
+      "baselineLogicalPixels": { "width": 1440, "height": 932 }
+    }
+  ]
+}

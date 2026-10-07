@@ -30,7 +30,7 @@
 | `Info.plist` | `CFBundleShortVersionString`、`CFBundleVersion` |
 | `README.md` | 当前下载链接和兼容协议说明 |
 | `docs/INDEX.md` | 当前整理基线，如本次为架构或交付更新 |
-| Release 标题与 tag | 与 `CFBundleShortVersionString` 对应，例如 `v0.6.3` |
+| Release 标题与 tag | 与 `CFBundleShortVersionString` 对应，例如 `v0.6.4` |
 | Release assets | arm64 ZIP、x86_64 ZIP、`SHA256SUMS.txt` |
 
 `Wire.protocolVersion` 和 app 版本不是同一个维度：只有协议变更才必须阻止旧版互连；只改变 app 版本时是否兼容由协议和功能门槛决定。

@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "source": "Apple Support Identify your iMac page",
+  "sourceURL": "https://support.apple.com/en-us/108054",
+  "purpose": "Research asset inventory. These images are not loaded by the app yet.",
+  "licenseNote": "Keep the Apple source URL with every asset. Review redistribution rights before shipping copied Apple artwork in a public release.",
+  "transparentViews": {
+    "directory": "transparent",
+    "manifest": "transparent/manifest.json",
+    "filenameRule": "Replace commas in hw.model with underscores and append .png."
+  },
+  "preferredViews": [
+    { "models": ["iMac12,1"], "file": "official/imac-21-5-2011.jpg", "sourcePage": "https://support.apple.com/zh-cn/111983", "sourceType": "identification-fallback", "alpha": false, "note": "The technical specification page supplies a port diagram, not a product image." },
+    { "models": ["iMac12,2"], "file": "official/imac-27-2011.jpg", "sourcePage": "https://support.apple.com/zh-cn/112569", "sourceType": "identification-fallback", "alpha": false, "note": "The technical specification page supplies a port diagram, not a product image." },
+    { "models": ["iMac13,1"], "file": "technical-specs/sp665_imac_21-5inch_late2012_display.jpg", "sourcePage": "https://support.apple.com/zh-cn/112435", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac13,2"], "file": "technical-specs/sp667_imac_27inch_late2012_display.jpg", "sourcePage": "https://support.apple.com/zh-cn/112433", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac14,1"], "file": "technical-specs/SP687-specs_display_21-5inch_imac.jpg", "sourcePage": "https://support.apple.com/zh-cn/111967", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac14,2"], "file": "technical-specs/SP688-specs_display_27inch_imac.jpg", "sourcePage": "https://support.apple.com/zh-cn/111970", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac14,4"], "file": "technical-specs/SP701-specs_display_21-5inch_imac.jpg", "sourcePage": "https://support.apple.com/zh-cn/112031", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac15,1"], "file": "technical-specs/112434_SP707-imac-retina-overview-5K-2014.png", "sourcePage": "https://support.apple.com/zh-cn/112436", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMac16,1"], "file": "technical-specs/112036_SP733_display_21in_large.jpg", "sourcePage": "https://support.apple.com/zh-cn/112036", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac16,2"], "file": "technical-specs/112034_SP732_display_retina_21in_large.jpg", "sourcePage": "https://support.apple.com/zh-cn/112034", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac17,1"], "file": "technical-specs/112035_SP731_display_retina_27in_large.jpg", "sourcePage": "https://support.apple.com/zh-cn/112035", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac18,1"], "file": "technical-specs/111921_imac21inch2017.png", "sourcePage": "https://support.apple.com/zh-cn/111921", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMac18,2"], "file": "technical-specs/112026_Imac21inch4k2017.png", "sourcePage": "https://support.apple.com/zh-cn/112026", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMac18,3"], "file": "technical-specs/111969_imac27inch2017.png", "sourcePage": "https://support.apple.com/zh-cn/111969", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMacPro1,1"], "file": "technical-specs/111995_SP771-imac-pro-2017.png", "sourcePage": "https://support.apple.com/zh-cn/111995", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMac19,1"], "file": "official/imac-27-2019.jpg", "sourcePage": "https://support.apple.com/zh-cn/111998", "sourceType": "identification-fallback", "alpha": false, "note": "The technical specification page supplies only an energy label, not a product image." },
+    { "models": ["iMac19,2"], "file": "technical-specs/111963_imac-4k-21in-2019.png", "sourcePage": "https://support.apple.com/zh-cn/111963", "sourceType": "technical-specification", "alpha": true },
+    { "models": ["iMac20,1", "iMac20,2"], "file": "technical-specs/111913_sp821-imac-27.png", "sourcePage": "https://support.apple.com/zh-cn/111913", "sourceType": "technical-specification", "alpha": false },
+    { "models": ["iMac21,1"], "file": "official/imac-24in-2024-four-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/111895", "sourceType": "shared-2024-four-port-view", "alpha": true },
+    { "models": ["iMac21,2"], "file": "official/imac-24in-2024-two-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/111895", "sourceType": "shared-2024-two-port-view", "alpha": true },
+    { "models": ["Mac15,4"], "file": "official/imac-24in-2024-two-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/117733", "sourceType": "shared-2024-two-port-view", "alpha": true },
+    { "models": ["Mac15,5"], "file": "official/imac-24in-2024-four-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/117734", "sourceType": "shared-2024-four-port-view", "alpha": true },
+    { "models": ["Mac16,2"], "file": "official/imac-24in-2024-two-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/121556", "sourceType": "shared-2024-two-port-view", "alpha": true, "note": "The technical specification page supplies only an energy label, not a product image." },
+    { "models": ["Mac16,3"], "file": "official/imac-24in-2024-four-ports-colors.png", "sourcePage": "https://support.apple.com/zh-cn/121557", "sourceType": "shared-2024-four-port-view", "alpha": true, "note": "The technical specification page supplies only an energy label, not a product image." }
+  ],
+  "assets": [
+    {
+      "file": "official/imac-21-5-2011.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac12,1"]
+    },
+    {
+      "file": "official/imac-27-2011.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac12,2"]
+    },
+    {
+      "file": "official/imac-21-5-2012.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac13,1"]
+    },
+    {
+      "file": "official/imac-27-2012.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac13,2"]
+    },
+    {
+      "file": "official/imac-21-5-2013.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac14,1"]
+    },
+    {
+      "file": "official/imac-27-2013.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac14,2"]
+    },
+    {
+      "file": "official/imac-21-5-2014.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac14,4"]
+    },
+    {
+      "file": "official/imac-27-2014.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac15,1"]
+    },
+    {
+      "file": "official/imac-21-5-2015.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac16,1", "iMac16,2"]
+    },
+    {
+      "file": "official/imac-27-mid-2015.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": [],
+      "note": "iMac15,1 is also used by the late-2014 5K iMac; hw.model alone cannot choose between these two official source images."
+    },
+    {
+      "file": "official/imac-27-late-2015.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac17,1"]
+    },
+    {
+      "file": "official/imac-21-5-2017.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac18,1", "iMac18,2"]
+    },
+    {
+      "file": "official/imac-27-2017.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac18,3"]
+    },
+    {
+      "file": "official/imac-pro-2017.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMacPro1,1"]
+    },
+    {
+      "file": "official/imac-21-5-2019.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac19,2"]
+    },
+    {
+      "file": "official/imac-27-2019.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac19,1"]
+    },
+    {
+      "file": "official/imac-27-2020.jpg",
+      "format": "jpeg",
+      "alpha": false,
+      "models": ["iMac20,1", "iMac20,2"]
+    },
+    {
+      "file": "official/id-imac-24-2021.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["iMac21,1"]
+    },
+    {
+      "file": "official/id-imac-24-2021-2.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["iMac21,2"]
+    },
+    {
+      "file": "official/imac-24in-2023-two-ports-colors.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["Mac15,4"]
+    },
+    {
+      "file": "official/imac-24in-2023-four-ports-colors.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["Mac15,5"]
+    },
+    {
+      "file": "official/imac-24in-2024-two-ports-colors.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["Mac16,2"]
+    },
+    {
+      "file": "official/imac-24in-2024-four-ports-colors.png",
+      "format": "png",
+      "alpha": true,
+      "models": ["Mac16,3"]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Thunder Display 文档索引
 
-状态：代码派生基线，基于 `main` 的 `0.6.3`（`CFBundleVersion 16`）整理于 2026-10-07。
+状态：代码派生基线，基于 `main` 的 `0.6.4`（`CFBundleVersion 17`）整理于 2026-10-07。
 
 本目录是 Thunder Display 的技术与交付文档入口。`README.md` 面向安装和使用；这里定义当前实现的模块边界、协议约束、界面行为、构建和验证规则。代码或产品行为变更时，必须在同一提交更新对应文档。
 
@@ -10,6 +10,7 @@
 | 界面 | 原生窗口与 HTML 工作台的布局和交互约定 | [ui](ui/README.md) |
 | 运维 | 构建、打包、版本和验证口径 | [operations](operations/README.md) |
 | 交付计划 | 现状分析、任务和待办 | [plan](plan/README.md) |
+| 调研 | 尚未进入运行时的硬件目录与产品素材 | [research](research/README.md) |
 | 历史验证 | 不再作为当前版本结论，只保留当时证据 | [0.2.0 记录](validation-0.2.0.md)、[睡眠与菜单栏记录](sleep-menubar-validation.md) |
 
 ## 文档边界

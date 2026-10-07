@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Thunder Display macOS 26 glass icon</title>
+  <desc id="desc">A white cable symbol inside a blue liquid-glass rounded square with a transparent background.</desc>
+  <defs>
+    <linearGradient id="blue-glass" x1="330" y1="246" x2="700" y2="790" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#218eff"/>
+      <stop offset=".46" stop-color="#0878eb"/>
+      <stop offset="1" stop-color="#005fc9"/>
+    </linearGradient>
+    <linearGradient id="glass-face" x1="410" y1="246" x2="630" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".28"/>
+      <stop offset=".32" stop-color="#fff" stop-opacity=".08"/>
+      <stop offset=".68" stop-color="#fff" stop-opacity=".02"/>
+      <stop offset="1" stop-color="#001b44" stop-opacity=".11"/>
+    </linearGradient>
+    <linearGradient id="specular" x1="274" y1="260" x2="660" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".66"/>
+      <stop offset=".42" stop-color="#fff" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft-specular" x="210" y="190" width="604" height="300" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="cable-shadow" x="270" y="270" width="430" height="470" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#003e8b" flood-opacity=".2"/>
+    </filter>
+    <clipPath id="glass-shape">
+      <rect x="262" y="246" width="500" height="530" rx="140"/>
+    </clipPath>
+  </defs>
+
+  <rect x="262" y="246" width="500" height="530" rx="140" fill="url(#blue-glass)"/>
+  <g clip-path="url(#glass-shape)">
+    <rect x="262" y="246" width="500" height="530" fill="url(#glass-face)"/>
+    <path d="M232 412C313 289 440 238 607 245H800V332C614 300 427 330 266 487Z" fill="url(#specular)" opacity=".56" filter="url(#soft-specular)"/>
+    <path d="M286 276C362 250 440 246 512 246H623" fill="none" stroke="#fff" stroke-linecap="round" stroke-opacity=".35" stroke-width="3"/>
+    <rect x="263.5" y="247.5" width="497" height="527" rx="138" fill="none" stroke="#fff" stroke-opacity=".24" stroke-width="3"/>
+  </g>
+
+  <!-- Cable paths originate from Lucide Icons (ISC), scaled for the app icon. -->
+  <g transform="translate(296 309) scale(18)" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" filter="url(#cable-shadow)">
+    <path d="M17 21v-2a1 1 0 0 1-1-1v-1a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1a1 1 0 0 1-1 1"/>
+    <path d="M19 15V6.5a1 1 0 0 0-7 0v11a1 1 0 0 1-7 0V9"/>
+    <path d="M21 21v-2h-4"/>
+    <path d="M3 5h4V3"/>
+    <path d="M7 5a1 1 0 0 1 1 1v1a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1V3"/>
+  </g>
+</svg>

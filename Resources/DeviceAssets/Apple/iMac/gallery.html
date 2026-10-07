@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thunder Display - iMac 设备视图库</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+      color: #1d1d1f;
+      background: #f5f5f7;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header {
+      background: rgba(255, 255, 255, .88);
+      border-bottom: 1px solid #d2d2d7;
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .bar, main { max-width: 1360px; margin: 0 auto; padding: 0 32px; }
+    .bar { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 700; }
+    .bolt { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: #0071e3; font-size: 17px; }
+    .count { color: #6e6e73; font-size: 14px; }
+    main { padding-top: 48px; padding-bottom: 72px; }
+    h1 { font-size: 40px; line-height: 1.1; letter-spacing: 0; margin: 0 0 12px; }
+    .intro { color: #6e6e73; font-size: 17px; line-height: 1.5; margin: 0; max-width: 720px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 28px 0 44px; color: #6e6e73; font-size: 13px; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; background: #34c759; }
+    section { margin-top: 48px; }
+    h2 { margin: 0 0 18px; font-size: 22px; letter-spacing: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr)); gap: 16px; }
+    .card { min-width: 0; overflow: hidden; border: 1px solid #d2d2d7; border-radius: 14px; background: #fff; }
+    .device-image {
+      height: 196px;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background-color: #f5f5f7;
+      background-image: linear-gradient(45deg, #ececf0 25%, transparent 25%), linear-gradient(-45deg, #ececf0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ececf0 75%), linear-gradient(-45deg, transparent 75%, #ececf0 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+    .device-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .details { padding: 16px; }
+    .name { min-height: 42px; font-size: 15px; font-weight: 650; line-height: 1.38; }
+    .model { margin-top: 6px; color: #0071e3; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .resolution { margin-top: 8px; color: #6e6e73; font-size: 13px; }
+    .source { display: inline-block; margin-top: 14px; color: #0071e3; font-size: 13px; text-decoration: none; }
+    .source:hover { text-decoration: underline; }
+    @media (max-width: 640px) {
+      .bar, main { padding-left: 18px; padding-right: 18px; }
+      main { padding-top: 30px; }
+      h1 { font-size: 32px; }
+      .bar { min-height: 56px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="bolt">TD</span>Thunder Display</div>
+      <div class="count">iMac 设备视图库 · 25 个型号</div>
+    </div>
+  </header>
+  <main>
+    <h1>iMac 设备视图库</h1>
+    <p class="intro">按握手中的 <code>hw.model</code> 查找对应透明产品视图。棋盘背景用于确认图片已去除页面背景。</p>
+    <div class="legend"><span>透明 PNG，产品主体保持原始像素</span><span>资料截至 2026-10-07</span></div>
+    <div id="gallery"></div>
+  </main>
+  <script>
+    const groups = [
+      {
+        title: "2011-2014",
+        devices: [
+          ["iMac12,1", "iMac 21.5 英寸，2011 年中", "1920 × 1080", "https://support.apple.com/zh-cn/111983"],
+          ["iMac12,2", "iMac 27 英寸，2011 年中", "2560 × 1440", "https://support.apple.com/zh-cn/112569"],
+          ["iMac13,1", "iMac 21.5 英寸，2012 年末", "1920 × 1080", "https://support.apple.com/zh-cn/112435"],
+          ["iMac13,2", "iMac 27 英寸，2012 年末", "2560 × 1440", "https://support.apple.com/zh-cn/112433"],
+          ["iMac14,1", "iMac 21.5 英寸，2013 年末", "1920 × 1080", "https://support.apple.com/zh-cn/111967"],
+          ["iMac14,2", "iMac 27 英寸，2013 年末", "2560 × 1440", "https://support.apple.com/zh-cn/111970"],
+          ["iMac14,4", "iMac 21.5 英寸，2014 年中", "1920 × 1080", "https://support.apple.com/zh-cn/112031"],
+          ["iMac15,1", "iMac 27 英寸 Retina 5K，2014 年末或 2015 年中", "5120 × 2880", "https://support.apple.com/zh-cn/112436"]
+        ]
+      },
+      {
+        title: "2015-2020",
+        devices: [
+          ["iMac16,1", "iMac 21.5 英寸，2015 年末", "1920 × 1080", "https://support.apple.com/zh-cn/112036"],
+          ["iMac16,2", "iMac 21.5 英寸 Retina 4K，2015 年末", "4096 × 2304", "https://support.apple.com/zh-cn/112034"],
+          ["iMac17,1", "iMac 27 英寸 Retina 5K，2015 年末", "5120 × 2880", "https://support.apple.com/zh-cn/112035"],
+          ["iMac18,1", "iMac 21.5 英寸，2017 年", "1920 × 1080", "https://support.apple.com/zh-cn/111921"],
+          ["iMac18,2", "iMac 21.5 英寸 Retina 4K，2017 年", "4096 × 2304", "https://support.apple.com/zh-cn/112026"],
+          ["iMac18,3", "iMac 27 英寸 Retina 5K，2017 年", "5120 × 2880", "https://support.apple.com/zh-cn/111969"],
+          ["iMacPro1,1", "iMac Pro，2017 年", "5120 × 2880", "https://support.apple.com/zh-cn/111995"],
+          ["iMac19,1", "iMac 27 英寸 Retina 5K，2019 年", "5120 × 2880", "https://support.apple.com/zh-cn/111998"],
+          ["iMac19,2", "iMac 21.5 英寸 Retina 4K，2019 年", "4096 × 2304", "https://support.apple.com/zh-cn/111963"],
+          ["iMac20,1", "iMac 27 英寸 Retina 5K，2020 年", "5120 × 2880", "https://support.apple.com/zh-cn/111913"],
+          ["iMac20,2", "iMac 27 英寸 Retina 5K，2020 年", "5120 × 2880", "https://support.apple.com/zh-cn/111913"]
+        ]
+      },
+      {
+        title: "Apple 芯片 iMac",
+        devices: [
+          ["iMac21,1", "iMac 24 英寸 M1，2021 年，四接口", "4480 × 2520", "https://support.apple.com/zh-cn/111895"],
+          ["iMac21,2", "iMac 24 英寸 M1，2021 年，双接口", "4480 × 2520", "https://support.apple.com/zh-cn/111895"],
+          ["Mac15,4", "iMac 24 英寸 M3，2023 年，双端口", "4480 × 2520", "https://support.apple.com/zh-cn/117733"],
+          ["Mac15,5", "iMac 24 英寸 M3，2023 年，四端口", "4480 × 2520", "https://support.apple.com/zh-cn/117734"],
+          ["Mac16,2", "iMac 24 英寸 M4，2024 年，双端口", "4480 × 2520", "https://support.apple.com/zh-cn/121556"],
+          ["Mac16,3", "iMac 24 英寸 M4，2024 年，四端口", "4480 × 2520", "https://support.apple.com/zh-cn/121557"]
+        ]
+      }
+    ];
+
+    const gallery = document.querySelector("#gallery");
+    for (const group of groups) {
+      const section = document.createElement("section");
+      const cards = group.devices.map(([model, name, resolution, source]) => {
+        const image = "transparent/" + model.replace(",", "_") + ".png";
+        return `<article class="card"><div class="device-image"><img src="${image}" alt="${name}"></div><div class="details"><div class="name">${name}</div><div class="model">${model}</div><div class="resolution">物理面板：${resolution}</div><a class="source" href="${source}" target="_blank" rel="noreferrer">查看 Apple 技术规格</a></div></article>`;
+      }).join("");
+      section.innerHTML = `<h2>${group.title}</h2><div class="grid">${cards}</div>`;
+      gallery.append(section);
+    }
+  </script>
+</body>
+</html>

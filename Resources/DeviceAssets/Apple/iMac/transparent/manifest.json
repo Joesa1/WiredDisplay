@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 1,
+  "rule": "No generation, cropping, recoloring, sharpening, or product-pixel retouching. JPEG backgrounds are removed only when connected to an image edge and within the configured RGB tolerance.",
+  "backgroundTolerance": 26,
+  "views": [
+    {
+      "model": "iMac12,1",
+      "sourceFile": "official/imac-21-5-2011.jpg",
+      "sourceSHA256": "ce52d248d9062384eef8cc62ba060f2e4f5ba6aa00b0935e9c2613f4bff3e60d",
+      "outputFile": "transparent/iMac12_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 196915,
+      "sourcePage": "https://support.apple.com/zh-cn/111983"
+    },
+    {
+      "model": "iMac12,2",
+      "sourceFile": "official/imac-27-2011.jpg",
+      "sourceSHA256": "52b998437a42c2f85128c4b8168627f16dcfc28b89b649eafd3889d5e9acf2e1",
+      "outputFile": "transparent/iMac12_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 67935,
+      "sourcePage": "https://support.apple.com/zh-cn/112569"
+    },
+    {
+      "model": "iMac13,1",
+      "sourceFile": "technical-specs/sp665_imac_21-5inch_late2012_display.jpg",
+      "sourceSHA256": "52d1d34f70aa635608b1cc8fedb3ae6a1fbbda7f52e7be4dc7bb0df5ff0110cb",
+      "outputFile": "transparent/iMac13_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 11191,
+      "sourcePage": "https://support.apple.com/zh-cn/112435"
+    },
+    {
+      "model": "iMac13,2",
+      "sourceFile": "technical-specs/sp667_imac_27inch_late2012_display.jpg",
+      "sourceSHA256": "8da731d7109fb4ae992af51cd356bedd39d9a64f9b3a3ce21b88ced3ebf0aaa3",
+      "outputFile": "transparent/iMac13_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 9961,
+      "sourcePage": "https://support.apple.com/zh-cn/112433"
+    },
+    {
+      "model": "iMac14,1",
+      "sourceFile": "technical-specs/SP687-specs_display_21-5inch_imac.jpg",
+      "sourceSHA256": "5fd80772f06c8a44cc1357fdc74de5e40c0aef7df67c1610751d8d0d44225749",
+      "outputFile": "transparent/iMac14_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 11169,
+      "sourcePage": "https://support.apple.com/zh-cn/111967"
+    },
+    {
+      "model": "iMac14,2",
+      "sourceFile": "technical-specs/SP688-specs_display_27inch_imac.jpg",
+      "sourceSHA256": "3eed3f87e8e487c478f6c669152b41969f92dce1292635f5d27054810643ca6e",
+      "outputFile": "transparent/iMac14_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 9748,
+      "sourcePage": "https://support.apple.com/zh-cn/111970"
+    },
+    {
+      "model": "iMac14,4",
+      "sourceFile": "technical-specs/SP701-specs_display_21-5inch_imac.jpg",
+      "sourceSHA256": "f21f6f86a78bd77b4ab13838c6f755a1cc8aab250b6af7c557c7bb05d63e917f",
+      "outputFile": "transparent/iMac14_4.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 6654,
+      "sourcePage": "https://support.apple.com/zh-cn/112031"
+    },
+    {
+      "model": "iMac15,1",
+      "sourceFile": "technical-specs/112434_SP707-imac-retina-overview-5K-2014.png",
+      "sourceSHA256": "1dc8b6d7e4dad5179fe33e3842f38c81b0f5c353c660e2753d5046d0bdd9d975",
+      "outputFile": "transparent/iMac15_1.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/112436"
+    },
+    {
+      "model": "iMac16,1",
+      "sourceFile": "technical-specs/112036_SP733_display_21in_large.jpg",
+      "sourceSHA256": "14bdd81dd2154d88b8823c4775dd988903c7055cc70266f1e4c6e9348912f225",
+      "outputFile": "transparent/iMac16_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 5088,
+      "sourcePage": "https://support.apple.com/zh-cn/112036"
+    },
+    {
+      "model": "iMac16,2",
+      "sourceFile": "technical-specs/112034_SP732_display_retina_21in_large.jpg",
+      "sourceSHA256": "5c5abf64e72f6ca15bc414fa14930ae7f793475653f65c2d0b964cc1dc30cf48",
+      "outputFile": "transparent/iMac16_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 5161,
+      "sourcePage": "https://support.apple.com/zh-cn/112034"
+    },
+    {
+      "model": "iMac17,1",
+      "sourceFile": "technical-specs/112035_SP731_display_retina_27in_large.jpg",
+      "sourceSHA256": "e74ade815e0e8267cd722c655ef07edf3d70a21f48b997312606266046e3dae0",
+      "outputFile": "transparent/iMac17_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 8769,
+      "sourcePage": "https://support.apple.com/zh-cn/112035"
+    },
+    {
+      "model": "iMac18,1",
+      "sourceFile": "technical-specs/111921_imac21inch2017.png",
+      "sourceSHA256": "8b9e1c8e82c541d195f4535554314b91aa7034e1ccc8bbe93c228407cc7ce8dd",
+      "outputFile": "transparent/iMac18_1.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/111921"
+    },
+    {
+      "model": "iMac18,2",
+      "sourceFile": "technical-specs/112026_Imac21inch4k2017.png",
+      "sourceSHA256": "fe30606a4c1a967e12ecd76b885708952f6859fa17c6cfb46777fb73a283127b",
+      "outputFile": "transparent/iMac18_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 33821,
+      "sourcePage": "https://support.apple.com/zh-cn/112026"
+    },
+    {
+      "model": "iMac18,3",
+      "sourceFile": "technical-specs/111969_imac27inch2017.png",
+      "sourceSHA256": "6f38619b005c1c3ea6ac5f94d6d84cfc0547e4b69b377acbf126856284a472ed",
+      "outputFile": "transparent/iMac18_3.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 51521,
+      "sourcePage": "https://support.apple.com/zh-cn/111969"
+    },
+    {
+      "model": "iMacPro1,1",
+      "sourceFile": "technical-specs/111995_SP771-imac-pro-2017.png",
+      "sourceSHA256": "987837ef77cafbcaa8ddf346820f8411dd88b9f9ed3498f08185379b09452f30",
+      "outputFile": "transparent/iMacPro1_1.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/111995"
+    },
+    {
+      "model": "iMac19,1",
+      "sourceFile": "official/imac-27-2019.jpg",
+      "sourceSHA256": "16c344f0a5ef1b19e025038f1ec2a4b3dfb09ea60a47898fb49f46940089e06e",
+      "outputFile": "transparent/iMac19_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 72388,
+      "sourcePage": "https://support.apple.com/zh-cn/111998"
+    },
+    {
+      "model": "iMac19,2",
+      "sourceFile": "technical-specs/111963_imac-4k-21in-2019.png",
+      "sourceSHA256": "79518687632a38c4fd296ecc987ad166307cdda55008fcdcc21ebdc3ce3110cb",
+      "outputFile": "transparent/iMac19_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 33464,
+      "sourcePage": "https://support.apple.com/zh-cn/111963"
+    },
+    {
+      "model": "iMac20,1",
+      "sourceFile": "technical-specs/111913_sp821-imac-27.png",
+      "sourceSHA256": "9faa7624dfe139a57e2731d8b78c500427a5d26b36961404377d9e99768f5bb5",
+      "outputFile": "transparent/iMac20_1.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 41277,
+      "sourcePage": "https://support.apple.com/zh-cn/111913"
+    },
+    {
+      "model": "iMac20,2",
+      "sourceFile": "technical-specs/111913_sp821-imac-27.png",
+      "sourceSHA256": "9faa7624dfe139a57e2731d8b78c500427a5d26b36961404377d9e99768f5bb5",
+      "outputFile": "transparent/iMac20_2.png",
+      "method": "removed-corner-connected-background",
+      "backgroundRGB": [
+        255,
+        255,
+        255
+      ],
+      "transparentPixelCount": 41277,
+      "sourcePage": "https://support.apple.com/zh-cn/111913"
+    },
+    {
+      "model": "iMac21,1",
+      "sourceFile": "official/imac-24in-2024-four-ports-colors.png",
+      "sourceSHA256": "653be1c049eb16ad69bd6f1f4883fee00c28d9ed3e8566b5a9949fe40b665cf4",
+      "outputFile": "transparent/iMac21_1.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/111895"
+    },
+    {
+      "model": "iMac21,2",
+      "sourceFile": "official/imac-24in-2024-two-ports-colors.png",
+      "sourceSHA256": "652e97c7c0b92fb9938ea034d0eb719566461e30e757cd46adf246da26de5707",
+      "outputFile": "transparent/iMac21_2.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/111895"
+    },
+    {
+      "model": "Mac15,4",
+      "sourceFile": "official/imac-24in-2024-two-ports-colors.png",
+      "sourceSHA256": "652e97c7c0b92fb9938ea034d0eb719566461e30e757cd46adf246da26de5707",
+      "outputFile": "transparent/Mac15_4.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/117733"
+    },
+    {
+      "model": "Mac15,5",
+      "sourceFile": "official/imac-24in-2024-four-ports-colors.png",
+      "sourceSHA256": "653be1c049eb16ad69bd6f1f4883fee00c28d9ed3e8566b5a9949fe40b665cf4",
+      "outputFile": "transparent/Mac15_5.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/117734"
+    },
+    {
+      "model": "Mac16,2",
+      "sourceFile": "official/imac-24in-2024-two-ports-colors.png",
+      "sourceSHA256": "652e97c7c0b92fb9938ea034d0eb719566461e30e757cd46adf246da26de5707",
+      "outputFile": "transparent/Mac16_2.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/121556"
+    },
+    {
+      "model": "Mac16,3",
+      "sourceFile": "official/imac-24in-2024-four-ports-colors.png",
+      "sourceSHA256": "653be1c049eb16ad69bd6f1f4883fee00c28d9ed3e8566b5a9949fe40b665cf4",
+      "outputFile": "transparent/Mac16_3.png",
+      "method": "preserved-existing-alpha",
+      "backgroundRGB": null,
+      "transparentPixelCount": null,
+      "sourcePage": "https://support.apple.com/zh-cn/121557"
+    }
+  ]
+}
