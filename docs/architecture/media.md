@@ -2,6 +2,22 @@
 
 状态：代码派生基线。
 
+## 0.7.0 传输模式
+
+三档共用接收面板尺寸、HiDPI 和可选 4K 兼容缩放；分辨率和传输模式独立选择。WebView 按设备保存选择，原生连接时读取，连接/会话期间禁止改档，自动重连沿用当前会话选择。
+
+| 模式 | 采集与传输 | 呈现与边界 |
+| --- | --- | --- |
+| 低延迟 SDR | 8-bit NV12，HEVC Main 或 H.264 High；速度优先，40–150 Mbit/s 目标码率按像素数计算 | sRGB，有损，60fps 上限 |
+| 色彩保真 | 10-bit x420，硬件 HEVC Main10；40–300 Mbit/s 目标码率按像素数计算 | 保留 10-bit 解码输出，sRGB/Display P3 SDR；仍为有损 4:2:0，不支持时报错 |
+| 无损 RGB | BGRA8 逐像素原样传输，不经视频编解码；一帧在途 | 原始采集像素到接收缓冲逐字节一致；8-bit 采集仍可能有色带，不是 HDR 或物理面板一致性承诺 |
+
+接收侧沿用 AVSampleBufferDisplayLayer，通过明确的 CVPixelBuffer 色彩附件交给系统色彩管理，不另建 Metal 渲染器。协议中的色彩空间描述流内容，不替换物理显示器 ICC。链路繁忙时跳过新采集帧，界面报告实际确认帧率。
+
+面板适配复用 `apple-thunderbolt-display-catalog.json`，只对内建屏按型号读取物理像素，避免系统超采样模式被误当物理面板；外接屏和未知型号沿用运行时几何。运行时 backingScaleFactor 决定 HiDPI。删除了将所有高分辨率 Retina 都改成 4480×2520，以及将部分笔记本面板改成 2560×1440 的硬编码。未知面板的运行时模式仍可能是缩放尺寸，不声称已识别物理原生像素。
+
+BGRA8 在 4480×2520@60 的理论载荷约 21.68 Gb/s（5120×2880@60 为 28.31 Gb/s），尚未计 TCP 与复制成本；不承诺这些尺寸稳定 60fps。色块根因需用同一桌面、同一亮度下三档 A/B 实测区分，照片不能证明根因。
+
 ## 目的与边界
 
 `Sources/Video.swift` 实现主机采集与编码、显示器解码与呈现、以及独立的 PCM 音频渲染。`Sources/VirtualDisplay.h` 提供创建虚拟显示器所需的 Objective-C 接口。媒体模块不拥有 TCP、配对或设备列表。
@@ -17,7 +33,7 @@ mirror mode: primary display ────┘          │
                                            │
                           `configuration` once + `video` frames
                                            │
-                                    CablePeer / Wire v2
+                                    CablePeer / Wire v3
 ```
 
 `ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。
@@ -49,7 +65,7 @@ audioConfiguration + audio
 
 ## 尺寸与光标坐标
 
-`DisplayProfile` 传递像素尺寸与 `hiDPI` 标志；逻辑尺寸由 `hiDPI` 推导。主机的虚拟显示器、ScreenCaptureKit 输出尺寸、`VideoConfiguration` 与接收端 surface 必须遵循同一个 profile。M1 24 英寸 iMac 的推荐逻辑桌面为 `2240 x 1260`，实际编码目标可为 `4480 x 2520`；2017 2.5K iMac 推荐 `2560 x 1440`。
+`DisplayProfile` 传递像素尺寸与 `hiDPI` 标志；逻辑尺寸由 `hiDPI` 推导。虚拟显示器、采集输出、视频配置和接收 surface 必须遵循同一个 profile。M1 24 英寸 iMac 为 `4480 x 2520`；2017 27 英寸 5K iMac 为 `5120 x 2880`，其 `2560 x 1440` 是 2x 逻辑尺寸。
 
 当前光标仅从主机向显示器同步位置与可选图像，不提供接收端向主机的鼠标、键盘或点击回传。渲染时不得按窗口像素比例拉伸光标；比例不一致时保持光标资源原始宽高比。
 

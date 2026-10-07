@@ -196,7 +196,10 @@
     .receiver-config .route-copy > i { color: var(--secondary); }
     .route-copy span { display: block; color: var(--secondary); font-size: 10px; }
     .route-copy strong { display: block; overflow: hidden; margin-top: 2px; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-    .host-options { display: flex; align-items: center; gap: 10px; }
+    .host-options { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .host-options label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .host-options select { max-width: 230px; padding: 6px; border: 1px solid var(--separator); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; }
+    .host-config { grid-template-columns: minmax(0, 1fr); }
     .mode-control .segment { min-width: 54px; }
     .audio-control { display: flex; align-items: center; gap: 7px; color: var(--secondary); font-size: 11px; white-space: nowrap; }
     .audio-control .switch { margin-left: 0; }
@@ -449,6 +452,8 @@
             <div class="host-config" id="host-config">
               <div class="route-copy"><i data-lucide="monitor-up"></i><div><span>主机输出</span><strong id="host-target">将桌面扩展到 iMac 5K</strong></div></div>
               <div class="host-options">
+                <label>传输模式 <select id="transmission-mode" aria-describedby="transmission-hint"><option value="lowLatency">低延迟 SDR · 有损</option><option value="fidelity">色彩保真 · 10-bit HEVC 有损</option><option value="lossless">无损 · RGB 原始像素</option></select></label>
+                <label>分辨率 <select id="stream-resolution"><option value="native">面板原生</option><option value="compatible">4K 兼容</option></select></label>
                 <div class="segmented-control mode-control" role="group" aria-label="显示模式">
                   <button class="segment active" data-output-mode="extend" aria-pressed="true">扩展</button>
                   <button class="segment" data-output-mode="mirror" aria-pressed="false">镜像</button>
@@ -457,6 +462,7 @@
                 <div class="audio-control"><span>防止显示器息屏</span><button class="switch on" id="prevent-sleep" aria-label="切换防止显示器息屏" aria-pressed="true"></button></div>
               </div>
             </div>
+            <p class="caption" id="transmission-hint"></p>
             <div class="receiver-config" id="receiver-config" hidden>
               <div class="route-copy"><i data-lucide="monitor-down"></i><div><span>显示器接收</span><strong id="receiver-target">等待 iMac 5K 从主机侧开始投送</strong></div></div>
               <span class="caption">息屏设置由主机在连接时指定</span>
@@ -623,7 +629,17 @@
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
       });
-      $('#host-config').hidden = !isHost;
+      $('#host-config').hidden = !isHost || showingLocal || !selected().id;
+      $('#transmission-hint').hidden = !isHost || showingLocal || !selected().id;
+      $('#transmission-mode').value = targetTransmissionMode();
+      $('#stream-resolution').value = selected().streamResolution || 'native';
+      $('#transmission-mode').disabled = Boolean(connectedId) || Boolean(window.__transmissionBusy);
+      $('#stream-resolution').disabled = Boolean(connectedId) || Boolean(window.__transmissionBusy);
+      $('#transmission-hint').textContent = {
+        lowLatency: '8-bit SDR，优先响应速度；分辨率根据对端面板计算。',
+        fidelity: '10-bit SDR，优先渐变和色彩；仍有损，需要两端硬件支持，不支持时提示换档。',
+        lossless: '采集后的 8-bit RGB 像素原样传输；带宽与内存负载高，实际帧率受链路限制。不能消除面板自身色差。'
+      }[targetTransmissionMode()];
       $('#receiver-config').hidden = isHost;
       const target = selected();
       $('#host-target').textContent = target.id ? `${outputMode === 'extend' ? '将桌面扩展到' : '镜像到'} ${target.name}` : '从左侧选择一台显示器';
@@ -836,6 +852,19 @@
     $('#role-cancel').addEventListener('click', () => { pendingRole = null; closeModal('role-modal'); });
     $('#role-confirm').addEventListener('click', () => { if (pendingRole) applyRole(pendingRole); closeModal('role-modal'); });
     const defaultSettings = { autoReconnect: true, menuBarStatus: true, preflight: true, keepDiagnostics: true };
+    function targetTransmissionMode() {
+      const value = selected().transmissionMode;
+      return ['lowLatency', 'fidelity', 'lossless'].includes(value) ? value : 'lowLatency';
+    }
+    ['transmission-mode', 'stream-resolution'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', (event) => {
+        if (showingLocal || localRole !== 'host' || connectedId || window.__transmissionBusy) { renderDetail(); return; }
+        const device = selected();
+        if (!device.id) return;
+        device[id === 'transmission-mode' ? 'transmissionMode' : 'streamResolution'] = event.target.value;
+        persist(); renderDetail();
+      });
+    });
     const settings = { ...defaultSettings, ...JSON.parse(localStorage.getItem('tb-mvp-settings') || '{}') };
     function renderSettings() {
       document.querySelectorAll('.switch[data-setting]').forEach((switchButton) => {

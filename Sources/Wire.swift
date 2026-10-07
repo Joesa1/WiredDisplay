@@ -16,9 +16,9 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 2
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.6.5"
-    static let maximumPacket = 16 * 1024 * 1024
+    static let protocolVersion = 3
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.0"
+    static let maximumPacket = 64 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
         append(UInt32(count + 1), to: &data)
@@ -86,6 +86,7 @@ struct DisplayProfile: Codable {
     let appVersion: String?
     let identity: PeerIdentity?
     let receiverCode: String?
+    var wideGamut: Bool = false
 
     init(width: Int, height: Int, hiDPI: Bool, hevc: Bool, appVersion: String?,
          identity: PeerIdentity? = nil, receiverCode: String? = nil) {
@@ -106,9 +107,11 @@ struct DisplayProfile: Codable {
         let ratio = to4K ? min(1, min(3840.0 / Double(width), 2160.0 / Double(height))) : 1
         let limitedWidth = Int(Double(width) * ratio) / 2 * 2
         let limitedHeight = Int(Double(height) * ratio) / 2 * 2
-        return DisplayProfile(width: limitedWidth, height: limitedHeight,
+        var result = DisplayProfile(width: limitedWidth, height: limitedHeight,
                               hiDPI: hiDPI, hevc: hevc, appVersion: appVersion,
                               identity: identity, receiverCode: receiverCode)
+        result.wideGamut = wideGamut
+        return result
     }
 }
 
@@ -133,6 +136,46 @@ struct VideoConfiguration: Codable {
     let height: Int
     let hevc: Bool
     let parameterSets: [Data]
+    var mode: TransmissionMode = .lowLatency
+    var colorSpace: StreamColorSpace = .sRGB
+
+    func validate() throws {
+        try DisplayProfile(width: width, height: height, hiDPI: false, hevc: hevc, appVersion: nil).validate()
+        guard mode != .fidelity || hevc,
+              mode != .lowLatency || colorSpace == .sRGB,
+              mode != .lossless || parameterSets.isEmpty else {
+            throw WireError.invalid("Invalid video mode configuration")
+        }
+    }
+}
+
+enum TransmissionMode: String, Codable, CaseIterable {
+    case lowLatency, fidelity, lossless
+
+    func bitrate(width: Int, height: Int) -> Int {
+        min(self == .fidelity ? 300_000_000 : 150_000_000,
+            max(40_000_000, width * height * (self == .fidelity ? 20 : 10)))
+    }
+}
+
+enum StreamColorSpace: String, Codable { case sRGB, displayP3 }
+
+struct PanelCatalog: Decodable {
+    struct Pixels: Decodable { let width: Int; let height: Int }
+    struct Panel: Decodable { let models: [String]; let nativePixels: Pixels }
+    let profiles: [Panel]
+
+    func nativePixels(model: String, builtIn: Bool) -> Pixels? {
+        builtIn ? profiles.first { $0.models.contains(model) }?.nativePixels : nil
+    }
+}
+
+// Packed BGRA rows have no padding on the wire; the sequence is big-endian.
+enum RawFrame {
+    static func byteCount(width: Int, height: Int) throws -> Int {
+        try DisplayProfile(width: width, height: height, hiDPI: false, hevc: false, appVersion: nil).validate()
+        return 8 + width * height * 4
+    }
 }
 
 struct PointerUpdate: Codable {
