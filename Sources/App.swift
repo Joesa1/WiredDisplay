@@ -37,9 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var listener: CableListener?
     private var peer: CablePeer?
     private var sender: AnyObject?
-    private var pointerTimer: Timer?
     private var monitorTimer: Timer?
-    private var pointerStarted = false
+    private var firstFrameAcknowledged = false
     private var receiverCursorHidden = false
     private var statusItem: NSStatusItem?
     private var statusText: NSMenuItem?
@@ -129,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 
     private func updateStatusMenu() {
-        let live = !stopping && !systemSleeping && peer != nil && (pointerStarted || videoWindow != nil)
+        let live = !stopping && !systemSleeping && peer != nil && (firstFrameAcknowledged || videoWindow != nil)
         let busy = connecting || pendingReconnect || (peer != nil && !live)
         let label = systemSleeping ? "已暂停" : stopping ? "正在断开" : live ? "已连接" : busy ? "正在连接" : listener != nil ? "等待主机连接" : "未连接"
         let symbol = live ? "display" : busy ? "arrow.triangle.2.circlepath" : "display.trianglebadge.exclamationmark"
@@ -1115,7 +1114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                     guard let self, self.sessionID == generation else { peer.stop(); return }
                     self.connecting = false
                     self.peer = peer
-                    self.pointerStarted = false
+                    self.firstFrameAcknowledged = false
                     self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
                     var receivedProfile = false
                     peer.onPacket = { [weak self, weak peer] kind, data in
@@ -1186,11 +1185,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 guard self.sessionID == generation else { return }
                                 guard let sender = self.sender as? ScreenSender else { return }
                                 sender.acknowledge(data)
-                                guard !self.pointerStarted else { return }
-                                self.pointerStarted = true
+                                guard !self.firstFrameAcknowledged else { return }
+                                self.firstFrameAcknowledged = true
                                 self.reconnectAttempt = false
-                                self.record("首帧已确认 · 已启动轻量鼠标同步")
-                                self.startPointer(sender: sender, peer: connection)
+                                self.record("首帧已确认 · 系统光标随画面同步")
                             }
                         case .statistics:
                             let stats = try Wire.decode(StreamStatistics.self, data)
@@ -1249,25 +1247,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
     }
 
-    @available(macOS 14.0, *)
-    private func startPointer(sender: ScreenSender, peer: CablePeer) {
-        pointerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak sender, weak peer] _ in
-            guard let sender, let peer, let event = CGEvent(source: nil) else { return }
-            let rect = CGDisplayBounds(sender.displayID)
-            guard rect.width > 0, rect.height > 0 else { return }
-            let location = event.location
-            let pointer = PointerUpdate(x: (location.x - rect.minX) / rect.width,
-                y: (location.y - rect.minY) / rect.height, visible: rect.contains(location),
-                hotX: 0, hotY: 0, width: 0, height: 0, png: nil)
-            let bounded = PointerUpdate(x: min(2, max(-2, pointer.x)), y: min(2, max(-2, pointer.y)),
-                visible: pointer.visible, hotX: pointer.hotX, hotY: pointer.hotY,
-                width: pointer.width, height: pointer.height, png: pointer.png)
-            guard (try? bounded.validate()) != nil, let payload = try? Wire.json(bounded) else { return }
-            peer.sendPointer(payload)
-        }
-        RunLoop.main.add(pointerTimer!, forMode: .common)
-    }
-
     private func tick() {
         defer { updateStatusMenu() }
         guard !systemSleeping else { return }
@@ -1314,9 +1293,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         connecting = false
         transportReady = false
         receiverKeepAwake = true
-        pointerStarted = false
+        firstFrameAcknowledged = false
         if receiverCursorHidden { NSCursor.unhide(); receiverCursorHidden = false }
-        pointerTimer?.invalidate(); pointerTimer = nil
         listener?.stop(); listener = nil
         for candidate in candidates.values { candidate.stop() }
         candidates.removeAll()

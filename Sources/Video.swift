@@ -358,7 +358,9 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         config.queueDepth = 3
         config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         config.colorSpaceName = CGColorSpace.sRGB
-        config.showsCursor = false
+        // Capture the host's actual cursor (hand, I-beam, resize, custom, etc.)
+        // in the video. Do not also send a separately drawn pointer.
+        config.showsCursor = true
         config.scalesToFit = true
         config.captureResolution = .best
         config.capturesAudio = audio
