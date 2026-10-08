@@ -60,6 +60,7 @@ try:
     assert code == 200
     auth = {'Authorization': 'Bearer ' + paired['token']}
     assert request('/api/state', headers=auth)[0] == 200
+    assert request('/api/state?appsRevision=0', headers=auth)[0] == 200
     assert request('/api/command', {'action': 'shell.exec'}, auth)[0] == 400
     assert request('/api/command', {'action': 'volume.set', 'value': -1}, auth)[0] == 400
     assert request('/api/command', {'action': 'volume.set', 'value': True}, auth)[0] == 400

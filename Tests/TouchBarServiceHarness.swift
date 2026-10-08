@@ -3,7 +3,9 @@ import Foundation
 // Test provider never reads or changes the host machine.
 final class TouchBarProviders {
     func configure(_ config: [String: Any]) {}
-    func snapshot(completion: @escaping ([String: Any]) -> Void) { completion(["apps": []]) }
+    func snapshot(applicationsRevision: Int?, completion: @escaping ([String: Any]) -> Void) {
+        completion(["appsRevision": 0, "apps": []])
+    }
     func perform(_ command: [String: Any], completion: @escaping (Bool, String) -> Void) { completion(true, "Test operation") }
     func refreshApplications() {}
     func stop() {}

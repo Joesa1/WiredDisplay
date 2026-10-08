@@ -12,6 +12,7 @@ final class TouchBarProviders {
     private var scanning = false
     private var commandPending: UUID?
     private var applications: [(id: String, name: String, url: URL, icon: String)] = []
+    private var applicationsRevision = 0
     private var cached: [String: Any] = [:]
     private var cachedAt = Date.distantPast
     private var weatherCache: [String: Any] = [:]
@@ -75,11 +76,12 @@ final class TouchBarProviders {
                     return
                 }
                 self.applications = sorted
+                self.applicationsRevision &+= 1
             }
         }
     }
 
-    func snapshot(completion: @escaping ([String: Any]) -> Void) {
+    func snapshot(applicationsRevision clientRevision: Int?, completion: @escaping ([String: Any]) -> Void) {
         guard !stopped else { completion([:]); return }
         if !busy {
             busy = true
@@ -127,7 +129,16 @@ final class TouchBarProviders {
         }
         let running = Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })
         let active = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        state["apps"] = enabled("appsEnabled") ? applications.map { ["id": $0.id, "name": $0.name, "icon": $0.icon, "running": running.contains($0.id), "active": active == $0.id] as [String: Any] } : []
+        if enabled("appsEnabled") {
+            state["appsRevision"] = applicationsRevision
+            if clientRevision == applicationsRevision {
+                state["appStates"] = applications.map { ["id": $0.id, "running": running.contains($0.id), "active": active == $0.id] as [String: Any] }
+            } else {
+                state["apps"] = applications.map { ["id": $0.id, "name": $0.name, "icon": $0.icon, "running": running.contains($0.id), "active": active == $0.id] as [String: Any] }
+            }
+        } else {
+            state["apps"] = []
+        }
         state["controls"] = enabled("controlsEnabled") ? hardware.snapshot() : ["volumeAvailable": false, "brightnessAvailable": false, "accessibility": false, "message": "已关闭"]
         completion(state)
     }

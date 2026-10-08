@@ -86,12 +86,13 @@ final class TouchBarService {
     }
     private func receive(_ request: TouchBarRequest, reply: @escaping (TouchBarResponse) -> Void) {
         func respond(_ status: Int, _ payload: [String: Any]) { reply(TouchBarResponse(status: status, body: (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8))) }
+        let route = String(request.uri.split(separator: "?", maxSplits: 1).first ?? "")
         let headers = Dictionary(request.headers, uniquingKeysWith: { first, _ in first })
         addresses = addressProvider()
         let hosts = Set((addresses + ["127.0.0.1", "localhost"]).map { "\($0):\(port)" })
         guard server != nil, let host = headers["host"], hosts.contains(host), headers["origin"] == nil || headers["origin"] == "http://" + host else { respond(403, ["message": "访问来源不被允许"]); return }
         guard headers["sec-fetch-site"] != "cross-site" else { respond(403, ["message": "禁止跨站访问"]); return }
-        if request.method == "GET", ["/", "/touch-bar.html"].contains(request.uri) {
+        if request.method == "GET", ["/", "/touch-bar.html"].contains(route) {
             guard let path = Bundle.main.url(forResource: "touch-bar", withExtension: "html"), let page = try? Data(contentsOf: path) else { respond(503, ["message": "手机页面资源缺失"]); return }
             reply(TouchBarResponse(status: 200, contentType: "text/html; charset=utf-8", body: page)); return
         }
@@ -100,7 +101,7 @@ final class TouchBarService {
             guard headers["content-type"]?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json", let object = try? JSONSerialization.jsonObject(with: request.body), let dictionary = object as? [String: Any] else { respond(400, ["message": "需要有效 JSON 请求"]); return }
             payload = dictionary
         }
-        if request.method == "POST", request.uri == "/api/pair" {
+        if request.method == "POST", route == "/api/pair" {
             attempts.removeAll { Date().timeIntervalSince($0) > 60 }
             guard attempts.count < 6, tokens.count < 8 else { respond(429, ["message": "配对请求过多，请稍后重试或在 Mac 重置访问"]); return }
             attempts.append(Date())
@@ -109,14 +110,16 @@ final class TouchBarService {
         }
         guard let auth = headers["authorization"], auth.hasPrefix("Bearer "), tokens.contains(String(auth.dropFirst(7))) else { respond(401, ["message": "请重新配对"]); return }
         let current = generation
-        if request.method == "GET", request.uri == "/api/state" {
-            providers.snapshot { [weak self] state in
+        if request.method == "GET", route == "/api/state" {
+            let clientRevision = URLComponents(string: "http://localhost" + request.uri)?.queryItems?
+                .first(where: { $0.name == "appsRevision" })?.value.flatMap(Int.init)
+            providers.snapshot(applicationsRevision: clientRevision) { [weak self] state in
                 guard let self, self.server != nil, self.generation == current else { respond(401, ["message": "访问已撤销"]); return }
                 var state = state; state["config"] = self.config; state["host"] = Host.current().localizedName ?? "Mac"
                 respond(200, state)
             }; return
         }
-        if request.method == "POST", request.uri == "/api/command" {
+        if request.method == "POST", route == "/api/command" {
             guard let action = payload["action"] as? String, let widget = Self.actions[action], config[widget] as? Bool == true else { respond(400, ["ok": false, "message": "操作未知或组件未开启"]); return }
             if ["volume.set", "brightness.set", "music.seek"].contains(action) {
                 guard let number = payload["value"] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite, number.doubleValue >= 0, number.doubleValue <= (action == "music.seek" ? 604800 : 100) else { respond(400, ["ok": false, "message": "数值超出范围"]); return }

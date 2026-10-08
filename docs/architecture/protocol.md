@@ -4,7 +4,7 @@
 
 ## 目的与版本
 
-`Wire` 是 Thunder Display 的应用层帧协议。当前开发版 `protocolVersion` 为 `5`，默认 TCP 端口为 `54321`。不同协议版本必须在 `hello` 阶段拒绝。0.7.3 实验版引入 Demo 3，双方必须升级，不能连接协议 2/3/4。
+`Wire` 是 Thunder Display 的应用层帧协议。当前开发版 `protocolVersion` 为 `5`，默认 TCP 端口为 `54321`。不同协议版本必须在 `hello` 阶段拒绝。0.7.4 实验版保留 Demo 3，双方必须升级，不能连接协议 2/3/4。
 
 协议 3 为 `DisplayProfile` 增加 `wideGamut`，为 `VideoConfiguration` 增加必需的 `mode`、`colorSpace`。`lowLatency` 使用 sRGB / 8-bit，`fidelity` 使用 HEVC Main10 / 10-bit，`lossless` 使用无视频编码的 BGRA8，后两档按接收屏幕色域选 sRGB 或 Display P3。三档均为 SDR、sRGB 传递函数；YUV 档明确使用 BT.709 矩阵。Display P3 原色与 BT.709 矩阵是不同字段。
 

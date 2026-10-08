@@ -55,7 +55,7 @@ html,body{background:#000;height:100%}.screen{height:100vh;height:100svh;border-
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-let token = '', timer, polling = false, failures = 0, apps = [], appSignature = '', toastTimer, commanding = false, online = false;
+let token = '', timer, polling = false, failures = 0, apps = [], appSignature = '', appsRevision = -1, toastTimer, commanding = false, online = false;
 try { token = localStorage.getItem('thunder-touch-bar-token') || ''; } catch {}
 function saveToken(value) { token = value; try { value ? localStorage.setItem('thunder-touch-bar-token',value) : localStorage.removeItem('thunder-touch-bar-token'); } catch {} }
 function text(id,value) { $(id).textContent = value == null ? '' : String(value); }
@@ -93,13 +93,14 @@ function render(state){
   const seekable=m.available && Number.isFinite(m.duration) && m.duration>0 && Number.isFinite(m.position);$('seek').disabled=!seekable;if(document.activeElement!==$('seek')){$('seek').max=seekable?m.duration:1;$('seek').value=seekable?m.position:0;}text('elapsed',seekable?formatTime(m.position):'—');text('duration',seekable?formatTime(m.duration):'—');
   const a=state.agents || {}, activeAgents=(a.items || []);$('agents-card').hidden=!config.agentsEnabled || activeAgents.length===0;text('agents-message',a.message);$('agents').replaceChildren(...activeAgents.map(item=>{const row=document.createElement('div');row.className='agent-row';const copy=document.createElement('div');copy.className='agent-copy';const name=document.createElement('strong');name.textContent=item.name;const detail=document.createElement('small');detail.textContent=[item.status,item.detail,item.updatedAt].filter(Boolean).join(' · ');copy.append(name,detail);row.append(copy);return row;}));
   const w=state.weather || {};text('city',w.city || '天气');text('temperature',w.available && Number.isFinite(w.temperature)?Math.round(w.temperature)+'°':'—');text('weather-description',w.available?w.description:w.message);text('weather-range',w.available?[Number.isFinite(w.high)?'最高 '+Math.round(w.high)+'°':'',Number.isFinite(w.low)?'最低 '+Math.round(w.low)+'°':''].filter(Boolean).join(' · '):'');text('weather-attribution',[w.attribution,w.updatedAt].filter(Boolean).join(' · '));
-  const nextApps=Array.isArray(state.apps)?state.apps:[];const signature=JSON.stringify(nextApps);if(signature!==appSignature){apps=nextApps;appSignature=signature;renderApps();}
+  if(Array.isArray(state.apps)){const signature=JSON.stringify(state.apps);if(signature!==appSignature){apps=state.apps;appSignature=signature;renderApps();}if(Number.isInteger(state.appsRevision))appsRevision=state.appsRevision;}
+  else if(Array.isArray(state.appStates)&&apps.length){const states=new Map(state.appStates.map(item=>[item.id,item]));let changed=false;apps=apps.map(app=>{const next=states.get(app.id),running=!!next?.running,active=!!next?.active;if(app.running!==running||app.active!==active)changed=true;return {...app,running,active};});if(changed){appSignature=JSON.stringify(apps);renderApps();}}
   const c=state.controls || {};for(const key of ['volume','brightness']){const available=c[key+'Available'] && Number.isFinite(c[key]);$(key).disabled=!available;if(document.activeElement!==$(key)&&available)$(key).value=c[key];text(key+'-value',available?Math.round(c[key]):'—');}
   $('mute-button').disabled=!(c.muteAvailable===undefined?c.volumeAvailable:c.muteAvailable);$('mute-button').setAttribute('aria-pressed',String(!!c.muted));$('mute-button').classList.toggle('active',!!c.muted);document.querySelectorAll('[data-action^="key."]').forEach(b=>b.disabled=!c.accessibility);text('controls-message',config.controlsEnabled?c.message:'');
 }
 async function poll(){
   clearTimeout(timer);if(polling || !token || document.hidden)return;polling=true;
-  try{const state=await request('/api/state');if(token){render(state);failures=0;connected(true,'已连接 · 本地控制台');$('pair').hidden=true;}}
+  try{const state=await request('/api/state?appsRevision='+encodeURIComponent(appsRevision));if(token){render(state);failures=0;connected(true,'已连接 · 本地控制台');$('pair').hidden=true;}}
   catch(error){if(token){failures++;connected(false,'连接中断 · 正在重连');}}
   finally{polling=false;if(token&&!document.hidden)timer=setTimeout(poll,Math.min(1000*Math.pow(2,failures),15000));}
 }

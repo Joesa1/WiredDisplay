@@ -32,13 +32,22 @@ struct ProviderTests {
         provider.configure(["appsEnabled": true, "musicEnabled": false, "controlsEnabled": false, "agentsEnabled": false, "weatherEnabled": false])
         let deadline = Date().addingTimeInterval(25)
         var apps: [[String: Any]] = []
+        var revision: Int?
         while Date() < deadline && apps.isEmpty {
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-            provider.snapshot { apps = $0["apps"] as? [[String: Any]] ?? [] }
+            provider.snapshot(applicationsRevision: nil) {
+                apps = $0["apps"] as? [[String: Any]] ?? []
+                revision = $0["appsRevision"] as? Int
+            }
         }
         assert(!apps.isEmpty, "Expected installed applications")
         assert(apps.allSatisfy { $0["id"] is String && $0["name"] is String && $0["running"] is Bool && $0["active"] is Bool })
         assert(apps.contains { ($0["icon"] as? String)?.hasPrefix("data:image/png;base64,") == true })
+        guard let revision else { fatalError("Missing app revision") }
+        var delta: [String: Any] = [:]
+        provider.snapshot(applicationsRevision: revision) { delta = $0 }
+        assert(delta["apps"] == nil)
+        assert((delta["appStates"] as? [[String: Any]])?.count == apps.count)
         provider.stop()
         print("Touch Bar provider checks passed; enumerated \(apps.count) real applications without executing controls.")
     }
