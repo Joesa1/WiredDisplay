@@ -81,7 +81,61 @@ import Foundation
             _ = try budget.acknowledge(UInt64(mode.frameLimit), now: 1)
             precondition(budget.reserve(now: 2) != nil)
         }
-        precondition(TransmissionMode.lossless.frameLimit == 1 && TransmissionMode.demo1.frameLimit == 2 && TransmissionMode.demo2.frameLimit == 2)
-        print("PASS: demo exact pixels, sparse/skipped/cursor/unchanged/full updates, raw fallback, immutable baseline, reset, bounded budgets, corrupt ancestry/length/LZ4 rejection")
+        precondition(TransmissionMode.lossless.frameLimit == 1 && TransmissionMode.demo1.frameLimit == 2 && TransmissionMode.demo2.frameLimit == 2 && TransmissionMode.demo3.frameLimit == 1)
+        try checkSystemDirtyRects()
+        print("PASS: demo exact pixels, sparse/skipped/cursor/unchanged/full updates, system dirty rect fallback, raw fallback, immutable baseline, reset, bounded budgets, corrupt ancestry/length/LZ4 rejection")
+    }
+
+    static func checkSystemDirtyRects() throws {
+        let width = 640, height = 480
+        var first = raw(width: width, height: height, sequence: 1)
+        let key = try LosslessDemoFrame.encode(first, previous: nil, width: width, height: height,
+                                                systemDirtyRects: [rect(1, 2, 3, 4)])
+        let decodedKey = try LosslessDemoFrame.decode(key, previous: nil, width: width, height: height, regions: true)
+        precondition(decodedKey == first)
+        first[8 + (3 * width + 2) * 4] ^= 0xFF
+        first.replaceSubrange(0..<8, with: sequence(2))
+        let changed = try LosslessDemoFrame.encode(first, previous: decodedKey, width: width, height: height,
+                                                    systemDirtyRects: [rect(2, 3, 1, 1), rect(4, 5, 2, 2)])
+        let changedBase = try Wire.integer(changed, at: 8, as: UInt64.self)
+        let changedResult = try LosslessDemoFrame.decode(changed, previous: decodedKey, width: width, height: height, regions: true)
+        precondition(changedBase == 1)
+        precondition(changedResult == first)
+        // A skipped ScreenCaptureKit sample invalidates its successor's dirty-rect baseline.
+        var afterSkippedCapture = first
+        afterSkippedCapture[8 + (20 * width + 20) * 4] ^= 0xFF
+        afterSkippedCapture[8 + (200 * width + 200) * 4] ^= 0xFF
+        afterSkippedCapture.replaceSubrange(0..<8, with: sequence(4))
+        let recovery = try LosslessDemoFrame.encode(afterSkippedCapture, previous: first, width: width, height: height,
+                                                    systemDirtyRects: nil)
+        let recoveryBase = try Wire.integer(recovery, at: 8, as: UInt64.self)
+        let recoveryResult = try LosslessDemoFrame.decode(recovery, previous: first, width: width, height: height, regions: true)
+        precondition(recoveryBase == 0)
+        precondition(recoveryResult == afterSkippedCapture)
+        for rects in [nil, [], [rect(-1, 1, 0, 2)], [rect(700, 1, 1, 1)]] as [[CGRect]?] {
+            let full = try LosslessDemoFrame.encode(first, previous: decodedKey, width: width, height: height, systemDirtyRects: rects)
+            let base = try Wire.integer(full, at: 8, as: UInt64.self)
+            let result = try LosslessDemoFrame.decode(full, previous: decodedKey, width: width, height: height, regions: true)
+            precondition(base == 0)
+            precondition(result == first)
+        }
+        let union = LosslessDemoFrame.systemDirtyUnion([rect(-2, 1, 5, 3), rect(632, 472, 8, 8)], width: width, height: height)
+        guard let union else { fatalError("Missing dirty-rect union") }
+        precondition(union.origin.x == 0 && union.origin.y == 1 && union.size.width == 640 && union.size.height == 479)
+    }
+
+    static func raw(width: Int, height: Int, sequence: UInt64) -> Data {
+        var data = Data(repeating: 0x44, count: try! RawFrame.byteCount(width: width, height: height))
+        data.replaceSubrange(0..<8, with: self.sequence(sequence))
+        return data
+    }
+
+    static func sequence(_ value: UInt64) -> Data {
+        var value = value.bigEndian
+        return withUnsafeBytes(of: &value) { Data($0) }
+    }
+
+    static func rect(_ x: Int, _ y: Int, _ width: Int, _ height: Int) -> CGRect {
+        CGRect(origin: CGPoint(x: Double(x), y: Double(y)), size: CGSize(width: Double(width), height: Double(height)))
     }
 }

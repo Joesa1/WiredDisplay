@@ -6,7 +6,7 @@
 
 ```text
 主机输出：扩展 / 镜像
-传输模式 [低延迟 SDR / 色彩保真（10-bit 有损）/ 无损 RGB / Demo 1：无损区域 / Demo 2：无损整帧]
+传输模式 [低延迟 SDR / 色彩保真（10-bit 有损）/ 无损 RGB / Demo 1：无损区域 / Demo 2：无损整帧 / Demo 3：系统变化区域]
 分辨率   [面板原生 / 4K 兼容]
 音频中继 [开关]    防止息屏 [开关]
 模式说明：位深、是否有损、带宽与面板色差边界
@@ -165,7 +165,7 @@ saved device
 
 ## Experimental lossless selection
 
-Demo 1 (`demo1`) uses two frames in flight, LZ4/raw selection and changed-region updates. Demo 2 (`demo2`) uses the same budget and compression, always full frames. Both share the existing per-device selection and reconnect lifecycle. Statistics name the active demo; descriptions mark the modes experimental and do not promise 60fps or reduced latency. No independent cursor option is added.
+Demo 1 (`demo1`) uses two frames in flight, LZ4/raw selection and changed-region updates. Demo 2 (`demo2`) uses the same budget and compression, always full frames. Demo 3 (`demo3`) uses ScreenCaptureKit dirty rect metadata, one frame in flight and one capture surface; missing, empty or invalid metadata sends a full keyframe. All share the existing per-device selection and reconnect lifecycle. Statistics name the active demo; descriptions mark the modes experimental and do not promise 60fps or reduced latency. No independent cursor option is added.
 ## Touch Bar
 
 工具区在“配置检查”后新增 Touch Bar 独立页面；移动端使用已确认的横屏黑色触控布局。服务默认关闭，Mac 配置页负责开关、地址／二维码、配对码和访问重置，并允许分别启用音乐、Agent、天气、应用坞及系统控制。没有雷雳接收设备时仍可使用本功能。
