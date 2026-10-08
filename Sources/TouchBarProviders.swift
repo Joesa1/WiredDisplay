@@ -60,7 +60,7 @@ final class TouchBarProviders {
                 for case let url as URL in enumerator {
                     guard url.pathExtension.lowercased() == "app", let bundle = Bundle(url: url), let id = bundle.bundleIdentifier, seen.insert(id).inserted else { continue }
                     let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String ?? url.deletingPathExtension().lastPathComponent
-                    let icon = TouchBarMedia.png(NSWorkspace.shared.icon(forFile: url.path), size: 32) ?? ""
+                    let icon = TouchBarMedia.png(NSWorkspace.shared.icon(forFile: url.path), size: 96) ?? ""
                     found.append((id, name, url, icon))
                     if found.count >= 1500 { break }
                 }
@@ -190,12 +190,14 @@ enum TouchBarProviderSchema {
     static func agents(_ data: Data, now: Date = Date()) -> [String: Any]? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let agents = root["agents"] as? [[String: Any]], agents.count <= 100 else { return nil }
         let statuses = ["idle", "ready", "connected", "thinking", "answering", "working", "needsInput", "responseReady"]
+        let activeStatuses = Set(["thinking", "answering", "working", "needsInput"])
         var items: [[String: Any]] = []
         for agent in agents {
             guard let id = agent["agent"] as? String, let name = agent["name"] as? String, let status = agent["status"] as? String, statuses.contains(status), let timestamp = agent["lastActive"] as? Double, timestamp.isFinite, timestamp >= 0, timestamp <= now.timeIntervalSince1970 + 60 else { return nil }
             let stale = timestamp > 0 && now.timeIntervalSince1970 - timestamp > 120
             let detail = [agent["label"] as? String, agent["tool"] as? String, agent["detail"] as? String].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-            var item: [String: Any] = ["id": String(id.prefix(128)), "name": String(name.prefix(128)), "status": stale ? "stale" : status, "detail": stale ? "超过 2 分钟没有新事件，状态待确认" : String(detail.prefix(1024))]
+            guard !stale, activeStatuses.contains(status) else { continue }
+            var item: [String: Any] = ["id": String(id.prefix(128)), "name": String(name.prefix(128)), "status": status, "detail": String(detail.prefix(1024))]
             if timestamp > 0 { item["updatedAt"] = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: timestamp)) }
             items.append(item)
         }

@@ -8,7 +8,9 @@ struct ProviderTests {
         let parsed = TouchBarProviderSchema.agents(fresh, now: now)!
         assert((parsed["items"] as! [[String: Any]])[0]["status"] as? String == "working")
         let stale = TouchBarProviderSchema.agents(fresh, now: Date(timeIntervalSince1970: 2200))!
-        assert((stale["items"] as! [[String: Any]])[0]["status"] as? String == "stale")
+        assert((stale["items"] as! [[String: Any]]).isEmpty)
+        let idle = Data(#"{"agents":[{"agent":"codex","name":"Codex","status":"idle","lastActive":1990}]}"#.utf8)
+        assert((TouchBarProviderSchema.agents(idle, now: now)!["items"] as! [[String: Any]]).isEmpty)
         assert(TouchBarProviderSchema.agents(Data(#"{"agents":[{"agent":"codex","name":"Codex","status":"invented","lastActive":10}]}"#.utf8), now: now) == nil)
         assert(TouchBarProviderSchema.agents(Data(#"{"agents":{}}"#.utf8), now: now) == nil)
         assert(TouchBarProviderSchema.agents(fresh, now: Date(timeIntervalSince1970: 100)) == nil)
