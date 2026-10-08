@@ -46,9 +46,15 @@ import Network
             CVPixelBufferUnlockBaseAddress(input, [])
             let packet = try RawFrame.pack(input, sequence: 123)
             precondition(packet.count == 8 + width * height * 4)
-            for mode in [TransmissionMode.lossless, .demo1, .demo2] {
-                let wirePacket = mode.isDemo ? try LosslessDemoFrame.encode(packet, previous: nil,
-                    width: width, height: height, regions: mode == .demo1) : packet
+            for mode in [TransmissionMode.lossless, .demo1, .demo2, .demo3] {
+                let wirePacket: Data
+                if mode == .demo3 {
+                    wirePacket = try LosslessDemoFrame.encode(packet, previous: nil, width: width, height: height, systemDirtyRects: nil)
+                } else if mode.isDemo {
+                    wirePacket = try LosslessDemoFrame.encode(packet, previous: nil, width: width, height: height, regions: mode.usesLosslessRegions)
+                } else {
+                    wirePacket = packet
+                }
                 let config = VideoConfiguration(width: width, height: height, hevc: false,
                     parameterSets: [], mode: mode, colorSpace: .displayP3)
                 let decoder = HardwareDecoder()
@@ -68,8 +74,14 @@ import Network
                 if mode.isDemo {
                     expected[7] = 124
                     expected[8 + 100 * width * 4 + 40] ^= 255
-                    let delta = try LosslessDemoFrame.encode(expected, previous: packet,
-                        width: width, height: height, regions: mode == .demo1)
+                    let delta: Data
+                    if mode == .demo3 {
+                        delta = try LosslessDemoFrame.encode(expected, previous: packet, width: width, height: height,
+                                                             systemDirtyRects: [CGRect(origin: CGPoint(x: 10, y: 100), size: CGSize(width: 1, height: 1))])
+                    } else {
+                        delta = try LosslessDemoFrame.encode(expected, previous: packet,
+                                                            width: width, height: height, regions: mode.usesLosslessRegions)
+                    }
                     received = false
                     try decoder.decode(delta)
                     precondition(received)

@@ -984,9 +984,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 do {
                     guard kind == .hello else { throw WireError.invalid("请先配对") }
                     let hello = try Wire.decode(Hello.self, data)
-                    guard hello.version == Wire.protocolVersion else {
-                        throw WireError.invalid("协议版本不兼容，请更新两台 Mac")
-                    }
+                    try Wire.validateProtocol(hello.version)
                     guard hello.code == code else { throw WireError.invalid("配对码不正确") }
                     try profile.validate()
                     DispatchQueue.main.async {

@@ -60,6 +60,8 @@ import Darwin
             }
         }
         let payload = try Wire.json(Hello(version: Wire.protocolVersion, code: "123456", probe: true))
+        try Wire.validateProtocol(Wire.protocolVersion)
+        rejects { try Wire.validateProtocol(4) }
         let identity = PeerIdentity(id: "check-mac", name: "Check Mac", model: "MacBookPro", systemVersion: "macOS test")
         let paired = Hello(version: Wire.protocolVersion, code: "123456", identity: identity,
                            address: "10.10.10.2", receiverCode: "654321")
@@ -69,6 +71,11 @@ import Darwin
                                      appVersion: Wire.appVersion, identity: identity, receiverCode: "654321")
         let decodedProfile = try Wire.decode(DisplayProfile.self, Wire.json(profile))
         precondition(decodedProfile.identity?.name == "Check Mac" && decodedProfile.receiverCode == "654321")
+        let demo3 = VideoConfiguration(width: 2560, height: 1440, hevc: false, parameterSets: [],
+                                       mode: .demo3, colorSpace: .displayP3)
+        try demo3.validate()
+        let decodedDemo3 = try Wire.decode(VideoConfiguration.self, Wire.json(demo3))
+        precondition(decodedDemo3.mode == .demo3)
         let frame = Wire.header(.hello, count: payload.count) + payload
         let fd = client()
         // Exercise split headers and bodies, then two frames in one TCP write.
@@ -96,5 +103,9 @@ import Darwin
         precondition(closed.wait(timeout: .now() + 0.2) == .timedOut)
         listener.cancel()
         print("PASS: fragmented/coalesced frames, 4.5K raw framing, oversized frame rejection, reconnect, idempotent close")
+    }
+
+    static func rejects(_ action: () throws -> Void) {
+        do { try action(); fatalError("Expected rejection") } catch { }
     }
 }

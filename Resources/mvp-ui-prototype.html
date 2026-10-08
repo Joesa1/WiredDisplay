@@ -454,7 +454,7 @@
             <div class="host-config" id="host-config">
               <div class="route-copy"><i data-lucide="monitor-up"></i><div><span>主机输出</span><strong id="host-target">将桌面扩展到 iMac 5K</strong></div></div>
               <div class="host-options">
-                <label>传输模式 <select id="transmission-mode" aria-describedby="transmission-hint"><option value="lowLatency">低延迟 SDR · 有损</option><option value="fidelity">色彩保真 · 10-bit HEVC 有损</option><option value="lossless">无损 · RGB 原始像素</option><option value="demo1">Demo 1 · 无损区域</option><option value="demo2">Demo 2 · 无损整帧</option></select></label>
+                <label>传输模式 <select id="transmission-mode" aria-describedby="transmission-hint"><option value="lowLatency">低延迟 SDR · 有损</option><option value="fidelity">色彩保真 · 10-bit HEVC 有损</option><option value="lossless">无损 · RGB 原始像素</option><option value="demo1">Demo 1 · 无损区域</option><option value="demo2">Demo 2 · 无损整帧</option><option value="demo3">Demo 3 · 系统变化区域</option></select></label>
                 <label>分辨率 <select id="stream-resolution"><option value="native">面板原生</option><option value="compatible">4K 兼容</option></select></label>
                 <div class="segmented-control mode-control" role="group" aria-label="显示模式">
                   <button class="segment active" data-output-mode="extend" aria-pressed="true">扩展</button>
@@ -657,6 +657,7 @@
         fidelity: '10-bit SDR，优先渐变和色彩；仍有损，需要两端硬件支持，不支持时提示换档。',
         demo1: '实验：最多两帧在途，LZ4 无损压缩与变化区域更新；保留原始 RGB 和随画面光标。实际延迟与帧率需对比测试。',
         demo2: '实验：最多两帧在途，LZ4 无损压缩整帧；保留原始 RGB 和随画面光标。与 Demo 1 仅区域更新不同。',
+        demo3: '实验：仅一帧在途，使用系统报告的变化区域和 LZ4 无损压缩；缺少有效变化区域时发送完整 RGB 帧。保留原始 RGB 和随画面光标。',
         lossless: '采集后的 8-bit RGB 像素原样传输；带宽与内存负载高，实际帧率受链路限制。不能消除面板自身色差。'
       }[targetTransmissionMode()];
       $('#receiver-config').hidden = isHost;
@@ -873,7 +874,7 @@
     const defaultSettings = { autoReconnect: true, menuBarStatus: true, preflight: true, keepDiagnostics: true };
     function targetTransmissionMode() {
       const value = selected().transmissionMode;
-      return ['lowLatency', 'fidelity', 'lossless', 'demo1', 'demo2'].includes(value) ? value : 'lowLatency';
+      return ['lowLatency', 'fidelity', 'lossless', 'demo1', 'demo2', 'demo3'].includes(value) ? value : 'lowLatency';
     }
     ['transmission-mode', 'stream-resolution'].forEach((id) => {
       document.getElementById(id).addEventListener('change', (event) => {

@@ -17,8 +17,8 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 4
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.2"
+    static let protocolVersion = 5
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.3"
     static let maximumPacket = 64 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -45,6 +45,11 @@ enum Wire {
     static func decode<T: Decodable>(_ type: T.Type, _ data: Data) throws -> T {
         guard data.count <= 256 * 1024 else { throw WireError.invalid("控制消息过大") }
         return try JSONDecoder().decode(type, from: data)
+    }
+    static func validateProtocol(_ version: Int) throws {
+        guard version == protocolVersion else {
+            throw WireError.invalid("协议版本不兼容，请更新两台 Mac")
+        }
     }
 }
 
@@ -151,11 +156,18 @@ struct VideoConfiguration: Codable {
 }
 
 enum TransmissionMode: String, Codable, CaseIterable {
-    case lowLatency, fidelity, lossless, demo1, demo2
+    case lowLatency, fidelity, lossless, demo1, demo2, demo3
 
-    var isDemo: Bool { self == .demo1 || self == .demo2 }
+    var isDemo: Bool { self == .demo1 || self == .demo2 || self == .demo3 }
     var isRGB: Bool { self == .lossless || isDemo }
-    var frameLimit: Int { isDemo ? 2 : (self == .lossless ? 1 : 3) }
+    var usesLosslessRegions: Bool { self == .demo1 || self == .demo3 }
+    var frameLimit: Int {
+        switch self {
+        case .lossless, .demo3: return 1
+        case .demo1, .demo2: return 2
+        case .lowLatency, .fidelity: return 3
+        }
+    }
 
     func bitrate(width: Int, height: Int) -> Int {
         min(self == .fidelity ? 300_000_000 : 150_000_000,
@@ -231,6 +243,73 @@ enum LosslessDemoFrame {
         let size = expanded == 0 ? 0 : compressed.withUnsafeMutableBytes { dst in pixels.withUnsafeBytes { src in
             compression_encode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, expanded,
                 src.bindMemory(to: UInt8.self).baseAddress!, expanded, nil, COMPRESSION_LZ4)
+        } }
+        let useCompression = size > 0 && size < expanded
+        if useCompression { compressed.count = size; pixels = compressed }
+        var packet = Data()
+        Wire.append(sequence, to: &packet); Wire.append(base, to: &packet)
+        packet.append(useCompression ? 1 : 0)
+        for value in [x, y, w, h, expanded] { Wire.append(UInt32(value), to: &packet) }
+        packet.append(pixels)
+        return packet
+    }
+
+    // A nil result deliberately means a full keyframe: the stream metadata cannot be trusted.
+    static func systemDirtyUnion(_ rects: [CGRect]?, width: Int, height: Int) -> CGRect? {
+        guard let rects, !rects.isEmpty else { return nil }
+        var union: (minX: Int, minY: Int, maxX: Int, maxY: Int)?
+        for rect in rects {
+            guard rect.origin.x.isFinite, rect.origin.y.isFinite,
+                  rect.size.width.isFinite, rect.size.height.isFinite,
+                  rect.size.width > 0, rect.size.height > 0 else { return nil }
+            let right = rect.origin.x + rect.size.width, bottom = rect.origin.y + rect.size.height
+            guard right.isFinite, bottom.isFinite else { return nil }
+            let lowX = max(0, min(Double(width), rect.origin.x))
+            let lowY = max(0, min(Double(height), rect.origin.y))
+            let highX = max(0, min(Double(width), right))
+            let highY = max(0, min(Double(height), bottom))
+            let minX = Int(floor(lowX)), minY = Int(floor(lowY))
+            let maxX = Int(ceil(highX)), maxY = Int(ceil(highY))
+            guard minX < maxX, minY < maxY else { return nil }
+            if let value = union {
+                union = (min(value.minX, minX), min(value.minY, minY), max(value.maxX, maxX), max(value.maxY, maxY))
+            } else {
+                union = (minX, minY, maxX, maxY)
+            }
+        }
+        guard let union else { return nil }
+        return CGRect(origin: CGPoint(x: Double(union.minX), y: Double(union.minY)),
+                      size: CGSize(width: Double(union.maxX - union.minX), height: Double(union.maxY - union.minY)))
+    }
+
+    static func encode(_ raw: Data, previous: Data?, width: Int, height: Int,
+                       systemDirtyRects: [CGRect]?) throws -> Data {
+        guard let rect = systemDirtyUnion(systemDirtyRects, width: width, height: height),
+              let previous else {
+            return try encode(raw, previous: nil, width: width, height: height, regions: false)
+        }
+        let count = try RawFrame.byteCount(width: width, height: height)
+        guard raw.count == count, previous.count == count else { throw WireError.invalid("Invalid demo source size") }
+        let sequence = try Wire.integer(raw, at: 0, as: UInt64.self)
+        let base = try Wire.integer(previous, at: 0, as: UInt64.self)
+        guard sequence > base, base > 0 else { throw WireError.invalid("Invalid demo source ancestry") }
+        let x = Int(rect.origin.x), y = Int(rect.origin.y)
+        let w = Int(rect.size.width), h = Int(rect.size.height)
+        guard x >= 0, y >= 0, w > 0, h > 0, x + w <= width, y + h <= height else {
+            return try encode(raw, previous: nil, width: width, height: height, regions: false)
+        }
+        var pixels = Data(count: w * h * 4)
+        pixels.withUnsafeMutableBytes { dst in raw.withUnsafeBytes { src in
+            for row in 0..<h {
+                memcpy(dst.baseAddress!.advanced(by: row * w * 4),
+                       src.baseAddress!.advanced(by: 8 + ((y + row) * width + x) * 4), w * 4)
+            }
+        } }
+        let expanded = pixels.count
+        var compressed = Data(count: expanded)
+        let size = compressed.withUnsafeMutableBytes { dst in pixels.withUnsafeBytes { src in
+            compression_encode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, expanded,
+                                      src.bindMemory(to: UInt8.self).baseAddress!, expanded, nil, COMPRESSION_LZ4)
         } }
         let useCompression = size > 0 && size < expanded
         if useCompression { compressed.count = size; pixels = compressed }
