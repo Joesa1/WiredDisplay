@@ -1,7 +1,7 @@
 ---
 id: all-features-test-001
 scope: Review open PRs and build an integrated local candidate
-status: in-progress
+status: done
 depends-on: []
 ---
 
@@ -49,3 +49,7 @@ Both feature sets must be reachable in the same application, with mutually exclu
 ## Implementation handoff
 
 PR #4 was merged locally with conflicts resolved by preserving both Touch Bar page packaging and the panel catalog, and both UI documentation sections. PR #2 captured-cursor behavior already exists on this branch; no duplicate cursor merge was needed. PR #3 / #5 display modes, pixel reconstruction, cache-version probe and geometry remain unchanged. PR #4 blocking findings are fixed with regression tests. Version is 0.7.2 build 21, protocol 4. Local checks and both architecture packages passed; independent final review remains required. No GitHub merge, push or release was performed.
+
+## Final verification
+
+Independent review passed in 4278af9, recorded in ../reviews/all-features-test-001-001.md. Both packages were extracted and verified against the integrated source. Local review/integration/package delivery is complete; physical dual-Mac, iPhone Safari and Intel runtime acceptance remains with the user. GitHub PRs remain open.
