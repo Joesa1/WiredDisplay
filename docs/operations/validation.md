@@ -73,3 +73,16 @@ xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h \
 
 - [validation-0.2.0.md](../validation-0.2.0.md) 实际描述的是 2026-10-03 的 0.2.x 观察，文件名与内容版本不一致，只可用来追溯当时网络问题。
 - [sleep-menubar-validation.md](../sleep-menubar-validation.md) 记录了 0.6.2-pr1 的静态与构建验证；其中双机睡眠测试明确未执行，不能推导出 0.6.3 已通过。
+
+## 0.7.1 lossless comparison demos
+
+```sh
+xcrun swiftc -O Sources/Wire.swift Tests/LosslessDemoCheck.swift -o /private/tmp/thunder-lossless-demo-check
+/private/tmp/thunder-lossless-demo-check
+```
+
+Covers exact BGRA reconstruction for full/sparse/cursor/unchanged updates, changes accumulated across skipped captures, raw fallback for incompressible data, immutable baseline snapshots, connection reset, bounded frame budgets, and rejection of malformed/truncated/trailing/over-expanding compressed data and wrong ancestry. `VideoModesCheck` also exercises both demos with padded CoreVideo rows, 4.5K pixels, P3 tags, and retained submitted buffers that must not change during later updates.
+
+Both endpoints must run 0.7.1 protocol 4. Compare the original lossless mode, Demo 1 and Demo 2 on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
+
+2026-10-08 local verification: LosslessDemoCheck, VideoModesCheck (including local Main10 hardware encode/decode), TransportCheck, HTML script syntax/select-option checks, and arm64/x86_64 build/package signature/version checks passed. Both packages identify as 0.7.1 build 20. Existing SDK deprecation warnings and x86_64 compatibility-library linker warnings remain; successful cross-compilation does not verify Intel runtime. No dual-Mac demo performance claim is made.

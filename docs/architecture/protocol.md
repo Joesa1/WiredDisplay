@@ -4,7 +4,7 @@
 
 ## 目的与版本
 
-`Wire` 是 Thunder Display 的应用层帧协议。当前开发版 `protocolVersion` 为 `3`，默认 TCP 端口为 `54321`。不同协议版本必须在 `hello` 阶段拒绝。0.7.0 两端都必须升级，不能连接协议 2 的 0.6.5。
+`Wire` 是 Thunder Display 的应用层帧协议。当前开发版 `protocolVersion` 为 `4`，默认 TCP 端口为 `54321`。不同协议版本必须在 `hello` 阶段拒绝。0.7.1 实验版两端都必须升级，不能连接协议 2/3。
 
 协议 3 为 `DisplayProfile` 增加 `wideGamut`，为 `VideoConfiguration` 增加必需的 `mode`、`colorSpace`。`lowLatency` 使用 sRGB / 8-bit，`fidelity` 使用 HEVC Main10 / 10-bit，`lossless` 使用无视频编码的 BGRA8，后两档按接收屏幕色域选 sRGB 或 Display P3。三档均为 SDR、sRGB 传递函数；YUV 档明确使用 BT.709 矩阵。Display P3 原色与 BT.709 矩阵是不同字段。
 
@@ -84,3 +84,11 @@
 3. 构建 arm64/x86_64；
 4. 在两台同版本 Mac 上做第一次配对、已配对重连、断开、睡眠恢复和互换角色验证；
 5. 更新发布说明中的最低兼容版本。
+
+## Protocol 4 lossless demos
+
+`demo1` and `demo2` preserve BGRA8 and color tags. Both allow two unacknowledged frames. The original lossless mode retains its BE64 + raw BGRA layout and one-frame budget.
+
+Demo video payload: BE64 sequence, BE64 base sequence, u8 compression (0 raw, 1 LZ4), BE32 x/y/width/height, BE32 expanded byte count, then region bytes. The fixed header is 37 bytes. Full frames use base 0 and the whole configured rectangle. Delta frames must name the previous decoded sequence. An unchanged frame has a zero rectangle and empty raw payload. Expanded bytes must equal rectangle width × height × 4, with dimensions bounded by the negotiated profile before decompression. Compressed data must decode exactly and consume the entire input.
+
+Demo 1 compares pixels against the last transmitted frame (not the previous capture), preserving changes across skipped captures; one bounding rectangle is the initial minimal region representation. Demo 2 always sends full frames. Use native LZ4 only when smaller than raw. Receiver reconstructs a new immutable complete image before presentation; render skipping never skips delta reconstruction. Invalid ancestry/length/coordinates/compression ends the session. New sessions reset the baseline and start full.

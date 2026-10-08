@@ -33,7 +33,7 @@ mirror mode: primary display ────┘          │
                                            │
                           `configuration` once + `video` frames
                                            │
-                                    CablePeer / Wire v3
+                                    CablePeer / Wire v4
 ```
 
 `ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。
@@ -67,7 +67,7 @@ audioConfiguration + audio
 
 `DisplayProfile` 传递像素尺寸与 `hiDPI` 标志；逻辑尺寸由 `hiDPI` 推导。虚拟显示器、采集输出、视频配置和接收 surface 必须遵循同一个 profile。M1 24 英寸 iMac 为 `4480 x 2520`；2017 27 英寸 5K iMac 为 `5120 x 2880`，其 `2560 x 1440` 是 2x 逻辑尺寸。
 
-当前光标仅从主机向显示器同步位置与可选图像，不提供接收端向主机的鼠标、键盘或点击回传。渲染时不得按窗口像素比例拉伸光标；比例不一致时保持光标资源原始宽高比。
+所有模式保持 ScreenCaptureKit showsCursor = true，系统光标随视频传输，不启用独立光标通道。
 
 ## 错误与清理
 
@@ -83,3 +83,7 @@ audioConfiguration + audio
 ## 验证
 
 媒体修改的最低验证包括：扩展与镜像各一次、两种目标 iMac 分辨率、首帧与重连、音频开关、鼠标跨屏、窗口关闭、断线、睡眠唤醒。Intel 真机、音频质量和端到端延迟必须记录为真实测量结果，不能从代码结构推导。
+
+## 0.7.1 comparison demos
+
+Demo 1 adds a changed bounding rectangle and native LZ4; Demo 2 adds only native LZ4. Both pipeline at most two frames, keeping the existing lossless mode at one frame as the baseline. Frame reservation precedes packing/compression; skipped captures do not change the region baseline. No resolution/color/bit-depth changes or lossy fallback. A full-screen bounding box sends a full frame; smaller rectangles are compressed without also compressing the full frame. This avoids duplicate compression cost but does not promise the smallest possible packet. Bounding-box comparison scans pixels and can save little for distant changes; tiled updates are deferred until measurements justify the complexity. CPU and memory costs may increase; two-Mac latency/FPS/bandwidth measurements are required.

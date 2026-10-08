@@ -6,7 +6,7 @@
 
 ```text
 主机输出：扩展 / 镜像
-传输模式 [低延迟 SDR / 色彩保真（10-bit 有损）/ 无损 RGB]
+传输模式 [低延迟 SDR / 色彩保真（10-bit 有损）/ 无损 RGB / Demo 1：无损区域 / Demo 2：无损整帧]
 分辨率   [面板原生 / 4K 兼容]
 音频中继 [开关]    防止息屏 [开关]
 模式说明：位深、是否有损、带宽与面板色差边界
@@ -105,7 +105,7 @@ saved device
   -> 失败：显示 TCP、配对或协议错误
 ```
 
-“重新发现”必须发送现有 `test` 动作并进行无媒体 probe，不能只显示本地 toast。连接按钮只因缺少地址/配对码、本机状态或活动互斥会话禁用；最终协议门槛由接收端 `hello.version` 校验。这样更新远端应用后，旧缓存不会阻止第一次协议 3 探测。
+“重新发现”必须发送现有 `test` 动作并进行无媒体 probe，不能只显示本地 toast。连接按钮只因缺少地址/配对码、本机状态或活动互斥会话禁用；最终协议门槛由接收端 `hello.version` 校验。这样更新远端应用后，旧缓存不会阻止第一次当前协议探测。
 
 本机配对码是本机持久化身份的一部分。它在断线、刷新和重启监听后保持不变；只有用户显式清除配对状态或重置本机身份时才可以改变。当前同一页面记录可使用保存凭据重连；把两端设备记录收敛为稳定、可双向复用的一键重连模型属于 `device-state-001`。
 
@@ -162,3 +162,7 @@ saved device
 ## 当前实现偏差
 
 本文件将当前实现与维护目标分开。以下问题已登记在 [backlog](../plan/backlog.md)，在修复前不得将其当作已交付能力：页面设备信息同时保存在 `localStorage` 和 `UserDefaults`、失联设备禁用与原生凭据清理缺失、某些偏好只存在 UI 层、旧设备静态样例可能进入真实列表、以及没有真实会话时的指标刷新边界。
+
+## Experimental lossless selection
+
+Demo 1 (`demo1`) uses two frames in flight, LZ4/raw selection and changed-region updates. Demo 2 (`demo2`) uses the same budget and compression, always full frames. Both share the existing per-device selection and reconnect lifecycle. Statistics name the active demo; descriptions mark the modes experimental and do not promise 60fps or reduced latency. No independent cursor option is added.

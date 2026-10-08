@@ -87,6 +87,7 @@ final class HardwareDecoder {
     private var format: CMFormatDescription?
     private var configuration: VideoConfiguration?
     private var rawPool: CVPixelBufferPool?
+    private var previousRaw: Data?
     var onImage: ((CVPixelBuffer, UInt64) -> Void)?
     var onFailure: ((String) -> Void)?
 
@@ -94,7 +95,7 @@ final class HardwareDecoder {
         stop()
         try config.validate()
         configuration = config
-        if config.mode == .lossless {
+        if config.mode.isRGB {
             let attrs: [CFString: Any] = [kCVPixelBufferWidthKey: config.width,
                 kCVPixelBufferHeightKey: config.height, kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferIOSurfacePropertiesKey: [:]]
@@ -129,7 +130,10 @@ final class HardwareDecoder {
     }
 
     func decode(_ data: Data) throws {
-        if let config = configuration, config.mode == .lossless {
+        if let config = configuration, config.mode.isRGB {
+            let data = config.mode.isDemo ? try LosslessDemoFrame.decode(data, previous: previousRaw,
+                width: config.width, height: config.height, regions: config.mode == .demo1) : data
+            if config.mode.isDemo { previousRaw = data }
             guard data.count == (try RawFrame.byteCount(width: config.width, height: config.height)),
                   let pool = rawPool else { throw WireError.invalid("Invalid RGB frame size") }
             var image: CVPixelBuffer?
@@ -181,6 +185,7 @@ final class HardwareDecoder {
         format = nil
         configuration = nil
         rawPool = nil
+        previousRaw = nil
     }
     deinit { stop() }
 }
@@ -195,7 +200,7 @@ extension VideoConfiguration {
         CVBufferSetAttachment(image, kCVImageBufferCGColorSpaceKey, cgColorSpace, .shouldPropagate)
         CVBufferSetAttachment(image, kCVImageBufferColorPrimariesKey, primaries, .shouldPropagate)
         CVBufferSetAttachment(image, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_sRGB, .shouldPropagate)
-        if mode != .lossless {
+        if !mode.isRGB {
             CVBufferSetAttachment(image, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
         }
     }
@@ -347,12 +352,13 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastPTS = CMTime.invalid
     private var profile: DisplayProfile?
     private var mode: TransmissionMode = .lowLatency
+    private var previousRaw: Data?
     private var streamColorSpace: StreamColorSpace = .sRGB
     private var capturePixelFormat: OSType {
         switch mode {
         case .lowLatency: return kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         case .fidelity: return kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
-        case .lossless: return kCVPixelFormatType_32BGRA
+        case .lossless, .demo1, .demo2: return kCVPixelFormatType_32BGRA
         }
     }
     private let peer: CablePeer
@@ -409,13 +415,13 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
             onStatus?("虚拟显示器已创建 · ID \(displayID) · 正在准备硬件编码器")
         }
         try queue.sync {
-            if mode == .lossless {
-                // One raw frame in flight bounds memory and adapts cadence to the link.
-                budget = FrameBudget(limit: 1)
+            if mode.isRGB {
+                // Demos pipeline two frames; the original lossless mode remains the baseline.
+                budget = FrameBudget(limit: mode.frameLimit)
                 active = true
             } else { try createEncoder(profile) }
         }
-        onStatus?(mode == .lossless ? "RGB 无损传输已准备 · 正在枚举屏幕" : (mirror ? "硬件编码器已准备 · 正在枚举主屏幕" : "硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕"))
+        onStatus?(mode.isRGB ? "RGB 无损传输已准备 · 正在枚举屏幕" : (mirror ? "硬件编码器已准备 · 正在枚举主屏幕" : "硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕"))
         var target: SCDisplay?
         for _ in 0..<30 {
             guard !peer.isStopped else { throw WireError.invalid("连接已取消") }
@@ -498,7 +504,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         if lastPTS.isValid && CMTimeCompare(pts, lastPTS) <= 0 { return }
         guard let sequence = budget.reserve(now: DispatchTime.now().uptimeNanoseconds) else { skipped += 1; return }
         lastPTS = pts
-        if mode == .lossless {
+        if mode.isRGB {
             do { try sendRaw(image, sequence: sequence) }
             catch { onFailure?(error.localizedDescription) }
             return
@@ -513,10 +519,13 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         guard let profile else { throw WireError.invalid("Missing display profile") }
         if !configured {
             peer.send(.configuration, try Wire.json(VideoConfiguration(width: profile.width, height: profile.height,
-                hevc: false, parameterSets: [], mode: .lossless, colorSpace: streamColorSpace)))
+                hevc: false, parameterSets: [], mode: mode, colorSpace: streamColorSpace)))
             configured = true
         }
-        let data = try RawFrame.pack(image, sequence: sequence)
+        let raw = try RawFrame.pack(image, sequence: sequence)
+        let data = mode.isDemo ? try LosslessDemoFrame.encode(raw, previous: previousRaw,
+            width: profile.width, height: profile.height, regions: mode == .demo1) : raw
+        if mode == .demo1 { previousRaw = raw }
         peer.send(.video, data)
         bytesSinceStats += data.count
     }
@@ -595,7 +604,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     self.rateSamples.append(mbps)
                     if self.rateSamples.count > 60 { self.rateSamples.removeFirst(self.rateSamples.count - 60) }
                     let stats = StreamStatistics(fps: fps, roundTripMilliseconds: self.lastRoundTrip,
-                                                 megabitsPerSecond: mbps, codec: self.mode == .lossless ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · 无损" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : (self.profile?.hevc == true ? "HEVC 8-bit · sRGB" : "H.264 8-bit · sRGB")),
+                                                 megabitsPerSecond: mbps, codec: self.mode.isRGB ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · \(self.mode == .demo1 ? "Demo 1 LZ4 区域" : (self.mode == .demo2 ? "Demo 2 LZ4 整帧" : "无损"))" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : (self.profile?.hevc == true ? "HEVC 8-bit · sRGB" : "H.264 8-bit · sRGB")),
                                                  samples: self.rateSamples)
                     self.onStats?(stats)
                     self.peer.send(.statistics, (try? Wire.json(stats)) ?? Data())
@@ -615,6 +624,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 VTCompressionSessionInvalidate(encoder)
             }
             encoder = nil
+            previousRaw = nil
         }
         virtualDisplay = nil
         audioEnabled = false; sentAudioConfiguration = false
