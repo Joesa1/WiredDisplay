@@ -83,7 +83,7 @@ xcrun swiftc -O Sources/Wire.swift Tests/LosslessDemoCheck.swift -o /private/tmp
 
 Covers exact BGRA reconstruction for full/sparse/cursor/unchanged updates, changes accumulated across skipped captures, raw fallback for incompressible data, immutable baseline snapshots, connection reset, bounded frame budgets, and rejection of malformed/truncated/trailing/over-expanding compressed data and wrong ancestry. `VideoModesCheck` also exercises both demos with padded CoreVideo rows, 4.5K pixels, P3 tags, and retained submitted buffers that must not change during later updates.
 
-Both endpoints must run 0.7.3 protocol 5. Compare the original lossless mode and all three demos on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
+Both endpoints must run 0.7.4 protocol 5. Compare the original lossless mode and all three demos on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
 
 Demo 3 local verification must cover ScreenCaptureKit dirty-rect union, missing/empty/invalid metadata falling back to a complete keyframe, exact BGRA reconstruction, forced complete recovery after a budget-skipped capture and its one-frame budget. `queueDepth = 1` is a source-level contract; local checks do not simulate a physical capture queue.
 
@@ -104,3 +104,11 @@ Lifecycle regression command:
 xcrun swiftc -swift-version 5 Sources/TouchBarProviders.swift Sources/TouchBarMedia.swift Sources/TouchBarHardware.swift Tests/TouchBarLifecycleTests.swift -o /private/tmp/thunder-touchbar-lifecycle -framework AppKit -framework Carbon -framework CoreAudio -framework ApplicationServices
 /private/tmp/thunder-touchbar-lifecycle
 ```
+
+## 0.7.4 latest local candidate
+
+2026-10-08: Includes the already-integrated cursor, per-device mode, lossless demo and Touch Bar work, plus the latest Touch Bar UI/Agent refinement. Application icons are sent on the first `appsRevision` response; one-second polling then carries only compact running/active state until the app list changes.
+
+Passed: `LosslessDemoCheck`, `TransportCheck`, `VideoModesCheck` including Display P3 and local Main10, `TouchBarProvidersTests`, `TouchBarLifecycleTests`, `TouchBarHTTPTests.py`, `TouchBarBrowser.cjs`, desktop/mobile HTML syntax and plist validation. `build.sh` produced `0.7.4 (23)` arm64 and x86_64 ZIPs; each extracted app had the expected single architecture and passed strict signature verification.
+
+No physical dual-Mac Demo 3 capture, actual Intel Mac runtime, iPhone Safari, player Automation authorization, or hardware control result is claimed by this local validation.
