@@ -1,6 +1,6 @@
 # Thunder Display 文档索引
 
-状态：开发基线 `0.7.1`（`CFBundleVersion 20`，未发布）；下载指引保留公开版 `0.6.5`，整理于 2026-10-08。
+状态：开发基线 `0.7.2`（`CFBundleVersion 21`，未发布）；下载指引保留公开版 `0.6.5`，整理于 2026-10-08。
 
 本目录是 Thunder Display 的技术与交付文档入口。`README.md` 面向安装和使用；这里定义当前实现的模块边界、协议约束、界面行为、构建和验证规则。代码或产品行为变更时，必须在同一提交更新对应文档。
 
@@ -34,3 +34,7 @@
 4. 修改 HTML、`WKWebView` bridge 或页面状态，更新 [ui](ui/README.md)。
 5. 修改构建、签名、版本或发布包，更新 [build and release](operations/build-release.md)。
 6. 新的真实设备结论写入 [validation](operations/validation.md)，并标明设备、版本、线材、步骤和结果。
+
+## Touch Bar 开发功能
+
+新增 [手机 Touch Bar](architecture/touch-bar.md)：通过独立局域网 HTTP 服务访问控制面板，入口位于工具区。雷雳仍是视频／音频传输路径；手机控制服务不承担屏幕视频传输。此功能在 PR 分支中开发，不代表当前公开安装包已经包含。

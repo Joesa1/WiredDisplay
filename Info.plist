@@ -7,11 +7,12 @@
 <key>CFBundleDisplayName</key><string>Thunder Display</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.7.1</string>
-<key>CFBundleVersion</key><string>20</string>
+<key>CFBundleShortVersionString</key><string>0.7.2</string>
+<key>CFBundleVersion</key><string>21</string>
 <key>LSMinimumSystemVersion</key><string>12.3</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSScreenCaptureUsageDescription</key><string>将扩展桌面通过雷雳线显示在另一台 Mac。</string>
-<key>NSLocalNetworkUsageDescription</key><string>仅通过雷雳网桥连接另一台 Mac。</string>
+<key>NSLocalNetworkUsageDescription</key><string>通过雷雳网桥连接另一台 Mac，或在开启 Touch Bar 后允许局域网手机访问控制面板。</string>
+<key>NSAppleEventsUsageDescription</key><string>控制所选音乐播放器并读取歌曲信息。</string>
 <key>NSBonjourServices</key><array><string>_wireddisplay._tcp</string></array>
 </dict></plist>

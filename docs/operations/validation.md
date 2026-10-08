@@ -86,3 +86,17 @@ Covers exact BGRA reconstruction for full/sparse/cursor/unchanged updates, chang
 Both endpoints must run 0.7.1 protocol 4. Compare the original lossless mode, Demo 1 and Demo 2 on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
 
 2026-10-08 local verification: LosslessDemoCheck, VideoModesCheck (including local Main10 hardware encode/decode), TransportCheck, HTML script syntax/select-option checks, and arm64/x86_64 build/package signature/version checks passed. Both packages identify as 0.7.1 build 20. Existing SDK deprecation warnings and x86_64 compatibility-library linker warnings remain; successful cross-compilation does not verify Intel runtime. No dual-Mac demo performance claim is made.
+
+## 0.7.2 integrated local candidate
+
+2026-10-08: PR #4 Touch Bar is integrated with the existing PR #3 / #5 baseline. PR #2 captured-cursor semantics were already present (system cursor remains captured, standalone pointer timer remains removed). Both architectures identify as 0.7.2 build 21, wire protocol 4. No panel catalog, product asset, display geometry or video pipeline change was introduced by the Touch Bar integration.
+
+Passed: TransportCheck, LosslessDemoCheck, VideoModesCheck (including local HEVC Main10), TouchBarProvidersTests, TouchBarLifecycleTests, TouchBarHTTPTests.py, and TouchBarBrowser.cjs. Lifecycle regression deterministically queues an action behind a barrier before revocation, and simulates successful permission return after reset/stop/reconfiguration without executing OS controls. HTTP regression changes the injected address provider between requests and verifies the new Host is accepted while old/unrelated Hosts remain rejected. Browser fixtures cover pairing, permission UI, controls, revocation, three landscape sizes, desktop Touch Bar navigation and all five display modes.
+
+Build/package checks: arm64 and x86_64 compilation, ZIP extraction, exact single architecture, version/build metadata, strict signature verification, required phone/UI/panel assets and SHA-256 verification. Existing SDK deprecation and x86_64 compatibility-library warnings remain. Physical two-Mac display/cursor/audio performance, iPhone Safari, Intel runtime, actual player authorization and hardware control are not verified by these local checks.
+
+Lifecycle regression command:
+```sh
+xcrun swiftc -swift-version 5 Sources/TouchBarProviders.swift Sources/TouchBarMedia.swift Sources/TouchBarHardware.swift Tests/TouchBarLifecycleTests.swift -o /private/tmp/thunder-touchbar-lifecycle -framework AppKit -framework Carbon -framework CoreAudio -framework ApplicationServices
+/private/tmp/thunder-touchbar-lifecycle
+```

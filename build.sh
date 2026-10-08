@@ -13,13 +13,14 @@ for architecture in arm64 x86_64; do
         -o "build/$architecture/WiredDisplay" \
         -framework AppKit -framework ScreenCaptureKit -framework VideoToolbox \
         -framework AVFoundation -framework CoreMedia -framework CoreVideo \
-        -framework SystemConfiguration -framework CoreGraphics -framework Network -framework WebKit
+        -framework SystemConfiguration -framework CoreGraphics -framework Network -framework WebKit \
+        -framework CoreAudio -framework Carbon -framework ApplicationServices -framework CoreImage
     app="$staging/Thunder Display.app"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp -X "build/$architecture/WiredDisplay" "$app/Contents/MacOS/WiredDisplay"
     cp -X Info.plist "$app/Contents/Info.plist"
     cp -X LICENSE-TargetBridge.txt "$app/Contents/Resources/"
-    cp -X Resources/mvp-ui-prototype.html "$app/Contents/Resources/"
+    cp -X Resources/mvp-ui-prototype.html Resources/touch-bar.html "$app/Contents/Resources/"
     cp -X Resources/DeviceProfiles/apple-thunderbolt-display-catalog.json "$app/Contents/Resources/"
     cp -X Resources/IconOne.png Resources/IconTwo.png Resources/AppIcon.icns "$app/Contents/Resources/"
     mkdir -p "$app/Contents/Resources/DeviceAssets/Apple/iMac"

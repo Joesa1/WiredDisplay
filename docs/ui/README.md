@@ -166,3 +166,22 @@ saved device
 ## Experimental lossless selection
 
 Demo 1 (`demo1`) uses two frames in flight, LZ4/raw selection and changed-region updates. Demo 2 (`demo2`) uses the same budget and compression, always full frames. Both share the existing per-device selection and reconnect lifecycle. Statistics name the active demo; descriptions mark the modes experimental and do not promise 60fps or reduced latency. No independent cursor option is added.
+## Touch Bar
+
+工具区在“配置检查”后新增 Touch Bar 独立页面；移动端使用已确认的横屏黑色触控布局。服务默认关闭，Mac 配置页负责开关、地址／二维码、配对码和访问重置，并允许分别启用音乐、Agent、天气、应用坞及系统控制。没有雷雳接收设备时仍可使用本功能。
+
+```text
+工具                  Touch Bar
+  配置检查            [开启局域网访问]
+  Touch Bar           地址 [复制] [打开]    [二维码]
+                      配对码               [重置访问]
+                      音乐      [开关] [播放器]
+                      Agent     [开关] [本地桥接端口]
+                      天气      [开关] [城市／坐标]
+                      应用坞    [开关] [刷新应用]
+                      系统控制  [开关]
+```
+
+手机先输入 Mac 显示的配对码；认证后展示真实数据。断网显示连接错误，重新连接同步状态但不重放点击指令；权限不足、播放器未运行、Agent Bridge 离线或天气未配置时显示对应原因，不填入设计样例。只有前台页面持续刷新。所有功能关闭时保留明确空态和连接状态。
+
+原生动作、快照字段、认证和功能边界以 [Touch Bar 合同](../architecture/touch-bar.md) 为准。设计稿 `docs/ui/mobile-touch-bar.html` 是独立模拟原型，运行时不得用它代替 `Resources/touch-bar.html`。

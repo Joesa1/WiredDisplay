@@ -2,7 +2,7 @@
 
 状态：当前 `build.sh` 基线。
 
-0.7.1 开发包使用协议 4，需两端同时升级，尚未发布。新增随包的 `apple-thunderbolt-display-catalog.json`，供内建屏面板尺寸适配使用。构建通过不等于双机显示、Intel 运行时或原生分辨率性能验收通过。
+0.7.2 本地集成测试包使用协议 4，需两端同时升级，尚未发布。新增随包的 `apple-thunderbolt-display-catalog.json`，供内建屏面板尺寸适配使用。构建通过不等于双机显示、Intel 运行时或原生分辨率性能验收通过。
 
 ## 输入与产物
 

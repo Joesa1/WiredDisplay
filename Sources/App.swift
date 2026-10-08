@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var receiverKeepAwake = true
     private var remoteSleepRequested = true
     private var webView: WKWebView?
+    private let touchBar = TouchBarService()
     private let roleLabel = NSTextField(labelWithString: "本机作为主机")
     private let connectionStateLabel = NSTextField(labelWithString: "未连接")
     private let diagnosticCableLabel = NSTextField(labelWithString: "正在检查雷雳网桥…")
@@ -526,6 +527,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     private func handlePrototypeAction(_ action: String, body: [String: Any]) {
         switch action {
+        case "touchBar":
+            touchBar.onStatus = { [weak self] payload in
+                guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+                self?.webView?.evaluateJavaScript("window.ThunderTouchBar?.receive(\(json));", completionHandler: nil)
+            }
+            touchBar.handle(body)
         case "device":
             let address = (body["address"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let code = (body["code"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1362,6 +1369,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         sender.miniaturize(nil)
         return false
     }
+    func applicationWillTerminate(_ notification: Notification) { touchBar.stop() }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if self.sender == nil && !stopping { listener?.stop(); peer?.stop(); return .terminateNow }
         quitting = true

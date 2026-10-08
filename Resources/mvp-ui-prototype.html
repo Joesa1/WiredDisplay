@@ -380,6 +380,7 @@
       .host-options { width: 100%; justify-content: space-between; }
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+  .tb-note{font-size:12px;line-height:1.6;color:var(--secondary)}.tb-connect{display:flex;justify-content:space-between;gap:24px;align-items:center}.tb-connect code{display:block;font-size:15px;overflow-wrap:anywhere}.tb-connect img{width:156px;height:156px;image-rendering:pixelated}.tb-actions{display:flex;align-items:center;gap:12px;margin-top:16px}.tb-code{font:600 24px ui-monospace,monospace;letter-spacing:4px;margin-left:12px}#tb-config .preference-row>div{max-width:85%}#tb-config input[type=checkbox]{width:20px;height:20px;accent-color:var(--blue)}#tb-config input:not([type=checkbox]),#tb-config select{display:block;border:1px solid var(--line,#ddd);background:var(--panel,#fff);color:inherit;border-radius:7px;padding:7px 9px;margin-top:5px;max-width:180px;width:100%}#tb-config label{font-size:12px;color:var(--secondary)}.tb-fields{display:flex;gap:12px;flex-wrap:wrap}#tb-connection[hidden],#tb-qr[hidden]{display:none}#tb-config a{color:var(--blue)}
   </style>
 </head>
 <body>
@@ -392,6 +393,7 @@
       <button class="nav-item" id="add-device-side"><i data-lucide="plus"></i>添加设备</button>
       <div class="sidebar-label">工具</div>
       <button class="nav-item" data-page="diagnostics"><i data-lucide="activity"></i>配置检查</button>
+      <button class="nav-item" data-page="touch-bar"><i data-lucide="rectangle-horizontal"></i>Touch Bar</button>
       <div class="sidebar-label setup-nav">本机配置</div>
       <button class="nav-item" data-settings="privacy"><i data-lucide="screen-share"></i>屏幕录制</button>
       <button class="nav-item" data-settings="displays"><i data-lucide="layout-panel-top"></i>排列显示器</button>
@@ -491,6 +493,21 @@
           <div class="diagnostic-box"><span class="caption">接收端屏幕参数</span><strong id="diag-demand">—</strong><p id="diag-demand-detail">运行检测后显示接收端真实参数。</p></div>
         </div>
         <div class="section"><h3>结果边界</h3><button class="disclosure" id="toggle-method">查看此检测能证明什么</button><div class="method-note" id="method-note">检测读取雷雳网桥地址、系统报告的对端连接状态和速率。macOS 没有统一公开的主动/被动线材字段，缺失时显示未知。吞吐数据只在真实显示会话中产生。</div></div>
+      </section>
+
+
+      <section class="page" id="touch-bar">
+        <div class="page-head"><div><h2>Touch Bar</h2><p>让手机成为 Mac 的横屏触控面板。</p></div><button class="button-secondary" data-tb-operation="status">刷新状态</button></div>
+        <div class="preference-group"><div class="preference-row"><div><strong>局域网访问</strong><p>手机与 Mac 连接到同一网络，扫码并输入配对码即可使用。</p></div><button class="switch" id="tb-enable" role="switch" aria-checked="false" aria-label="开启 Touch Bar 局域网访问"></button></div></div>
+        <p class="tb-note" id="tb-message" role="status">等待本机服务状态。</p>
+        <div class="section" id="tb-connection" hidden><div class="tb-connect"><div><h3>连接手机</h3><p class="tb-note">用手机相机扫描二维码，或在浏览器输入以下地址。</p><code id="tb-url"></code><div id="tb-alternate-addresses" class="tb-note"></div><div class="tb-actions"><button class="button-secondary" data-tb-operation="copy">复制地址</button><button class="button-secondary" data-tb-operation="open">本机预览</button></div><p>配对码 <strong class="tb-code" id="tb-code"></strong></p><button class="text-action" data-tb-operation="reset">重置配对码并撤销所有手机访问</button></div><img id="tb-qr" alt="手机访问二维码" hidden></div><p class="tb-note">仅在可信局域网使用。HTTP 配对验证访问权限，但不加密通信；停止服务后需重新配对。</p></div>
+        <form id="tb-config"><div class="section"><h3>手机组件</h3><div class="preference-group">
+          <div class="preference-row"><div><strong>音乐</strong><p>读取所选播放器的歌曲、专辑与播放状态。</p><label>播放器 <select name="player"><option value="music">Apple Music</option><option value="spotify">Spotify</option></select></label><p>先在 Mac 打开播放器。首次执行播放操作时，允许 Thunder Display 控制该播放器（系统设置 → 隐私与安全性 → 自动化）。</p></div><input type="checkbox" name="musicEnabled" aria-label="启用音乐组件" checked></div>
+          <div class="preference-row"><div><strong>Agent 状态</strong><p>连接已有 Agent Status 本地桥接服务；本功能不会自动安装或改写 Agent 配置。</p><label>桥接端口 <input type="number" name="agentPort" min="1" max="65535" value="3939" required></label><p>按 <a href="https://github.com/therswamhtet/agent-status-pock" target="_blank" rel="noreferrer">Agent Status 安装说明</a>配置对应 Agent 的 hooks／插件并启动服务；未连接时显示真实错误状态。</p></div><input type="checkbox" name="agentsEnabled" aria-label="启用 Agent 组件" checked></div>
+          <div class="preference-row"><div><strong>天气</strong><p>使用 Open-Meteo，约每十分钟更新。无需 Apple WeatherKit 开发者凭据。</p><div class="tb-fields"><label>城市名称<input name="city" placeholder="输入城市"></label><label>纬度<input name="latitude" type="number" min="-90" max="90" step="any" placeholder="−90 至 90"></label><label>经度<input name="longitude" type="number" min="-180" max="180" step="any" placeholder="−180 至 180"></label></div></div><input type="checkbox" name="weatherEnabled" aria-label="启用天气组件"></div>
+          <div class="preference-row"><div><strong>应用坞与启动台</strong><p>显示已扫描应用、图标、运行与前台状态。扫描系统应用目录及用户 Applications 文件夹。</p><button type="button" class="text-action" data-tb-operation="refreshApps">重新扫描应用</button></div><input type="checkbox" name="appsEnabled" aria-label="启用应用组件" checked></div>
+          <div class="preference-row"><div><strong>系统控制</strong><p>音量、静音、支持的内建屏幕亮度，以及 Esc、桌面和 Spotlight 快捷键。不支持的控制显示为不可用。</p><p>快捷键需在系统设置 → 隐私与安全性 → 辅助功能中允许 Thunder Display。外接显示器不保证支持亮度调节。</p></div><input type="checkbox" name="controlsEnabled" aria-label="启用系统控制组件" checked></div>
+        </div><div class="tb-actions"><button class="button-primary" type="submit">保存组件设置</button><span class="tb-note" id="tb-save-message" role="status"></span></div></div></form>
       </section>
 
       <section class="page" id="settings">
@@ -787,7 +804,8 @@
       document.querySelectorAll('.page').forEach((page) => page.classList.toggle('active', page.id === id));
       document.querySelectorAll('.nav-item[data-page]').forEach((nav) => nav.classList.toggle('active', nav.dataset.page === id));
       if (id === 'current-device') renderDevices();
-      const titles = { 'current-device': visibleDevice().name, diagnostics: '配置检查', settings: '偏好设置' };
+      if (id === 'touch-bar') touchBarRequest('status');
+      const titles = { 'current-device': visibleDevice().name, diagnostics: '配置检查', settings: '偏好设置', 'touch-bar': 'Touch Bar' };
       $('#toolbar-title').textContent = titles[id];
     }
     function openVersionModal() {
@@ -923,6 +941,45 @@
         $('#device-menu').classList.remove('show');
       }
     });
+
+    let touchBarEnabled = false, touchBarDirty = false;
+    function touchBarRequest(operation, config) {
+      const bridge = window.webkit?.messageHandlers?.thunderDisplay;
+      if (!bridge) { $('#tb-message').textContent = '请在 Thunder Display 原生应用内开启和配置 Touch Bar。'; return; }
+      bridge.postMessage({ action: 'touchBar', operation, ...(config ? { config } : {}) });
+    }
+    window.ThunderTouchBar = { receive(payload) {
+      touchBarEnabled = !!payload.enabled;
+      $('#tb-enable').classList.toggle('on', touchBarEnabled);
+      $('#tb-enable').setAttribute('aria-checked', String(touchBarEnabled));
+      $('#tb-message').textContent = payload.message || (touchBarEnabled ? '手机控制台已开启。' : '手机控制台已关闭。');
+      $('#tb-connection').hidden = !touchBarEnabled;
+      $('#tb-url').textContent = payload.url || '暂无可用局域网地址';
+      $('#tb-code').textContent = payload.code || '—';
+      const alternatives = (payload.addresses || []).filter(address => address !== payload.url);
+      $('#tb-alternate-addresses').replaceChildren(...alternatives.map(address => {
+        const line = document.createElement('div'); line.textContent = '其他网络地址：' + address; return line;
+      }));
+      const validQR = typeof payload.qr === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(payload.qr);
+      $('#tb-qr').hidden = !validQR;
+      if (validQR) $('#tb-qr').src = payload.qr; else $('#tb-qr').removeAttribute('src');
+      if (payload.config && !touchBarDirty) for (const [key,value] of Object.entries(payload.config)) {
+        const field = $('#tb-config').elements.namedItem(key);
+        if (field) { if (field.type === 'checkbox') field.checked = !!value; else field.value = value; }
+      }
+    }};
+    $('#tb-enable').onclick = () => touchBarRequest(touchBarEnabled ? 'disable' : 'enable');
+    document.querySelectorAll('[data-tb-operation]').forEach(button => button.addEventListener('click', () => touchBarRequest(button.dataset.tbOperation)));
+    $('#tb-config').addEventListener('input', () => { touchBarDirty = true; $('#tb-save-message').textContent = '有未保存的更改'; });
+    $('#tb-config').onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget, config = {};
+      for (const key of ['musicEnabled','agentsEnabled','weatherEnabled','appsEnabled','controlsEnabled']) config[key] = form.elements.namedItem(key).checked;
+      for (const key of ['player','city']) config[key] = form.elements.namedItem(key).value.trim();
+      for (const key of ['agentPort','latitude','longitude']) config[key] = Number(form.elements.namedItem(key).value);
+      if (config.weatherEnabled && (!config.city || !form.elements.latitude.value || !form.elements.longitude.value)) { $('#tb-save-message').textContent = '请填写天气城市、纬度和经度'; return; }
+      touchBarDirty = false; $('#tb-save-message').textContent = '已发送保存请求，请查看上方服务状态。'; touchBarRequest('save', config);
+    };
+
     renderSettings(); renderDevices(); updateIcons();
   </script>
 </body>
