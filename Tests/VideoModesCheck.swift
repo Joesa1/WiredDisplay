@@ -46,25 +46,42 @@ import Network
             CVPixelBufferUnlockBaseAddress(input, [])
             let packet = try RawFrame.pack(input, sequence: 123)
             precondition(packet.count == 8 + width * height * 4)
-            let config = VideoConfiguration(width: width, height: height, hevc: false, parameterSets: [], mode: .lossless, colorSpace: .displayP3)
-            let decoder = HardwareDecoder()
-            var received = false
-            decoder.onImage = { image, sequence in
-                precondition(sequence == 123)
-                precondition((try! RawFrame.pack(image, sequence: sequence)) == packet)
-                let space = CVBufferCopyAttachment(image, kCVImageBufferCGColorSpaceKey, nil) as! CGColorSpace
-                precondition(space.name == CGColorSpace.displayP3)
-                received = true
+            for mode in [TransmissionMode.lossless, .demo1, .demo2] {
+                let wirePacket = mode.isDemo ? try LosslessDemoFrame.encode(packet, previous: nil,
+                    width: width, height: height, regions: mode == .demo1) : packet
+                let config = VideoConfiguration(width: width, height: height, hevc: false,
+                    parameterSets: [], mode: mode, colorSpace: .displayP3)
+                let decoder = HardwareDecoder()
+                var received = false
+                var retained: CVPixelBuffer?
+                var expected = packet
+                decoder.onImage = { image, sequence in
+                    precondition((try! RawFrame.pack(image, sequence: sequence)) == expected)
+                    let space = CVBufferCopyAttachment(image, kCVImageBufferCGColorSpaceKey, nil) as! CGColorSpace
+                    precondition(space.name == CGColorSpace.displayP3)
+                    if retained == nil { retained = image }
+                    received = true
+                }
+                try decoder.configure(try Wire.decode(VideoConfiguration.self, Wire.json(config)))
+                try decoder.decode(wirePacket)
+                precondition(received)
+                if mode.isDemo {
+                    expected[7] = 124
+                    expected[8 + 100 * width * 4 + 40] ^= 255
+                    let delta = try LosslessDemoFrame.encode(expected, previous: packet,
+                        width: width, height: height, regions: mode == .demo1)
+                    received = false
+                    try decoder.decode(delta)
+                    precondition(received)
+                    precondition((try! RawFrame.pack(retained!, sequence: 123)) == packet)
+                }
+                rejects { try decoder.decode(Data(wirePacket.dropLast())) }
+                rejects { try decoder.decode(wirePacket + Data([0])) }
+                decoder.stop()
+                rejects { try decoder.decode(wirePacket) }
             }
-            try decoder.configure(try Wire.decode(VideoConfiguration.self, Wire.json(config)))
-            try decoder.decode(packet)
-            precondition(received)
-            rejects { try decoder.decode(Data(packet.dropLast())) }
-            rejects { try decoder.decode(packet + Data([0])) }
-            decoder.stop()
-            rejects { try decoder.decode(packet) }
         }
-        print("PASS: panel geometry, mode validation, padded RGB roundtrip, P3 tags, truncated/oversize raw rejection")
+        print("PASS: panel geometry, mode validation, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
         try checkMain10()
         if CommandLine.arguments.contains("--capture") {
             guard CGPreflightScreenCaptureAccess() else { throw WireError.invalid("Screen capture permission is required for --capture") }

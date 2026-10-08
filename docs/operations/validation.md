@@ -12,6 +12,17 @@
 
 `Tests/ReceiverCheck.py` 仍按协议 1 / app `0.2.0` 构造握手，与协议 3 不兼容。它是历史脚本，当前不得作为通过条件。恢复为现行测试前，必须先更新其握手、身份字段、错误断言和协议版本。
 
+## 版本发现与缓存恢复
+
+保存设备中的版本和协议是上次成功握手记录，不能代替实时探测。修改建连、probe 或版本展示后，必须在两台 Mac 上执行：
+
+1. 保留主机上的协议 2 历史记录，将显示器升级到协议 3 并开始监听。
+2. 主机打开版本弹窗，确认记录标明“上次握手”，点击“重新发现”。
+3. 确认 probe 成功后，对端版本和协议更新为实时握手结果，随后可以开始显示会话。
+4. 将显示器恢复为协议 2，重复 probe 或连接；接收端必须在 `hello.version` 校验处拒绝，且页面不得把旧缓存误报为实时结果。
+
+这项检查需要真实雷雳网桥和两端应用，不能由 `TransportCheck` 代替。
+
 ## 0.7.0 模式检查
 
 ```sh
@@ -62,3 +73,16 @@ xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h \
 
 - [validation-0.2.0.md](../validation-0.2.0.md) 实际描述的是 2026-10-03 的 0.2.x 观察，文件名与内容版本不一致，只可用来追溯当时网络问题。
 - [sleep-menubar-validation.md](../sleep-menubar-validation.md) 记录了 0.6.2-pr1 的静态与构建验证；其中双机睡眠测试明确未执行，不能推导出 0.6.3 已通过。
+
+## 0.7.1 lossless comparison demos
+
+```sh
+xcrun swiftc -O Sources/Wire.swift Tests/LosslessDemoCheck.swift -o /private/tmp/thunder-lossless-demo-check
+/private/tmp/thunder-lossless-demo-check
+```
+
+Covers exact BGRA reconstruction for full/sparse/cursor/unchanged updates, changes accumulated across skipped captures, raw fallback for incompressible data, immutable baseline snapshots, connection reset, bounded frame budgets, and rejection of malformed/truncated/trailing/over-expanding compressed data and wrong ancestry. `VideoModesCheck` also exercises both demos with padded CoreVideo rows, 4.5K pixels, P3 tags, and retained submitted buffers that must not change during later updates.
+
+Both endpoints must run 0.7.1 protocol 4. Compare the original lossless mode, Demo 1 and Demo 2 on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
+
+2026-10-08 local verification: LosslessDemoCheck, VideoModesCheck (including local Main10 hardware encode/decode), TransportCheck, HTML script syntax/select-option checks, and arm64/x86_64 build/package signature/version checks passed. Both packages identify as 0.7.1 build 20. Existing SDK deprecation warnings and x86_64 compatibility-library linker warnings remain; successful cross-compilation does not verify Intel runtime. No dual-Mac demo performance claim is made.

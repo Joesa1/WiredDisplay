@@ -1,4 +1,5 @@
 import Foundation
+import Compression
 
 enum WireError: Error, LocalizedError {
     case invalid(String)
@@ -16,8 +17,8 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 3
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.0"
+    static let protocolVersion = 4
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.1"
     static let maximumPacket = 64 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -143,14 +144,18 @@ struct VideoConfiguration: Codable {
         try DisplayProfile(width: width, height: height, hiDPI: false, hevc: hevc, appVersion: nil).validate()
         guard mode != .fidelity || hevc,
               mode != .lowLatency || colorSpace == .sRGB,
-              mode != .lossless || parameterSets.isEmpty else {
+              !mode.isRGB || (!hevc && parameterSets.isEmpty) else {
             throw WireError.invalid("Invalid video mode configuration")
         }
     }
 }
 
 enum TransmissionMode: String, Codable, CaseIterable {
-    case lowLatency, fidelity, lossless
+    case lowLatency, fidelity, lossless, demo1, demo2
+
+    var isDemo: Bool { self == .demo1 || self == .demo2 }
+    var isRGB: Bool { self == .lossless || isDemo }
+    var frameLimit: Int { isDemo ? 2 : (self == .lossless ? 1 : 3) }
 
     func bitrate(width: Int, height: Int) -> Int {
         min(self == .fidelity ? 300_000_000 : 150_000_000,
@@ -175,6 +180,129 @@ enum RawFrame {
     static func byteCount(width: Int, height: Int) throws -> Int {
         try DisplayProfile(width: width, height: height, hiDPI: false, hevc: false, appVersion: nil).validate()
         return 8 + width * height * 4
+    }
+}
+
+// Demo frames preserve BGRA bytes; only their wire representation changes.
+enum LosslessDemoFrame {
+    static let headerSize = 37
+
+    static func encode(_ raw: Data, previous: Data?, width: Int, height: Int, regions: Bool) throws -> Data {
+        let count = try RawFrame.byteCount(width: width, height: height)
+        guard raw.count == count, previous == nil || previous!.count == count else {
+            throw WireError.invalid("Invalid demo source size")
+        }
+        let sequence = try Wire.integer(raw, at: 0, as: UInt64.self)
+        var base: UInt64 = 0
+        var x = 0, y = 0, w = width, h = height
+        if regions, let previous {
+            base = try Wire.integer(previous, at: 0, as: UInt64.self)
+            guard base > 0, sequence > base else { throw WireError.invalid("Invalid demo source ancestry") }
+            var minX = width, minY = height, maxX = -1, maxY = -1
+            // ponytail: one bounding rectangle scans the frame; use tiles only if measured savings justify it.
+            raw.withUnsafeBytes { current in previous.withUnsafeBytes { old in
+                for row in 0..<height {
+                    let offset = 8 + row * width * 4
+                    let a = current.baseAddress!.advanced(by: offset), b = old.baseAddress!.advanced(by: offset)
+                    if memcmp(a, b, width * 4) == 0 { continue }
+                    minY = min(minY, row); maxY = row
+                    var left = 0, right = width - 1
+                    while left < width && memcmp(a.advanced(by: left * 4), b.advanced(by: left * 4), 4) == 0 { left += 1 }
+                    while right > left && memcmp(a.advanced(by: right * 4), b.advanced(by: right * 4), 4) == 0 { right -= 1 }
+                    minX = min(minX, left); maxX = max(maxX, right)
+                }
+            } }
+            if maxY < 0 { x = 0; y = 0; w = 0; h = 0 }
+            else { x = minX; y = minY; w = maxX - minX + 1; h = maxY - minY + 1 }
+            if w == width && h == height { base = 0 }
+        }
+        guard sequence > 0 else { throw WireError.invalid("Invalid demo sequence") }
+        var pixels = Data(count: w * h * 4)
+        if !pixels.isEmpty {
+            pixels.withUnsafeMutableBytes { dst in raw.withUnsafeBytes { src in
+                for row in 0..<h {
+                    memcpy(dst.baseAddress!.advanced(by: row * w * 4),
+                        src.baseAddress!.advanced(by: 8 + ((y + row) * width + x) * 4), w * 4)
+                }
+            } }
+        }
+        let expanded = pixels.count
+        var compressed = Data(count: expanded)
+        let size = expanded == 0 ? 0 : compressed.withUnsafeMutableBytes { dst in pixels.withUnsafeBytes { src in
+            compression_encode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, expanded,
+                src.bindMemory(to: UInt8.self).baseAddress!, expanded, nil, COMPRESSION_LZ4)
+        } }
+        let useCompression = size > 0 && size < expanded
+        if useCompression { compressed.count = size; pixels = compressed }
+        var packet = Data()
+        Wire.append(sequence, to: &packet); Wire.append(base, to: &packet)
+        packet.append(useCompression ? 1 : 0)
+        for value in [x, y, w, h, expanded] { Wire.append(UInt32(value), to: &packet) }
+        packet.append(pixels)
+        return packet
+    }
+
+    static func decode(_ packet: Data, previous: Data?, width: Int, height: Int, regions: Bool) throws -> Data {
+        let count = try RawFrame.byteCount(width: width, height: height)
+        guard packet.count >= headerSize, packet.count < Wire.maximumPacket,
+              previous == nil || previous!.count == count else { throw WireError.invalid("Invalid demo frame size") }
+        let sequence = try Wire.integer(packet, at: 0, as: UInt64.self)
+        let base = try Wire.integer(packet, at: 8, as: UInt64.self)
+        let compression = try Wire.integer(packet, at: 16, as: UInt8.self)
+        let x = Int(try Wire.integer(packet, at: 17, as: UInt32.self))
+        let y = Int(try Wire.integer(packet, at: 21, as: UInt32.self))
+        let w = Int(try Wire.integer(packet, at: 25, as: UInt32.self))
+        let h = Int(try Wire.integer(packet, at: 29, as: UInt32.self))
+        let expanded = Int(try Wire.integer(packet, at: 33, as: UInt32.self))
+        let prior = try previous.map { try Wire.integer($0, at: 0, as: UInt64.self) } ?? 0
+        guard sequence > prior, x <= width, y <= height, w <= width - x, h <= height - y,
+              expanded == w * h * 4, compression <= 1 else { throw WireError.invalid("Invalid demo region") }
+        if base == 0 {
+            guard x == 0, y == 0, w == width, h == height else { throw WireError.invalid("Incomplete demo keyframe") }
+        } else {
+            guard regions, previous != nil, base == prior,
+                  (w > 0 && h > 0) || (x == 0 && y == 0 && w == 0 && h == 0) else {
+                throw WireError.invalid("Invalid demo ancestry")
+            }
+        }
+        let payload = Data(packet.dropFirst(headerSize))
+        var pixels: Data
+        if compression == 0 {
+            guard payload.count == expanded else { throw WireError.invalid("Invalid raw demo payload") }
+            pixels = payload
+        } else {
+            guard expanded > 0, !payload.isEmpty, payload.count < expanded else { throw WireError.invalid("Invalid compressed demo payload") }
+            // One extra byte detects an over-expanding stream, even when its claimed size is valid.
+            pixels = Data(count: expanded + 1)
+            try pixels.withUnsafeMutableBytes { dst in try payload.withUnsafeBytes { src in
+                var stream = compression_stream(dst_ptr: dst.bindMemory(to: UInt8.self).baseAddress!, dst_size: expanded + 1,
+                    src_ptr: src.bindMemory(to: UInt8.self).baseAddress!, src_size: payload.count, state: nil)
+                guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_LZ4) == COMPRESSION_STATUS_OK else {
+                    throw WireError.invalid("Cannot create LZ4 decoder")
+                }
+                defer { compression_stream_destroy(&stream) }
+                stream.dst_ptr = dst.bindMemory(to: UInt8.self).baseAddress!; stream.dst_size = expanded + 1
+                stream.src_ptr = src.bindMemory(to: UInt8.self).baseAddress!; stream.src_size = payload.count
+                let status = compression_stream_process(&stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
+                guard status == COMPRESSION_STATUS_END, stream.src_size == 0, stream.dst_size == 1 else {
+                    throw WireError.invalid("Invalid LZ4 output size or stream")
+                }
+            } }
+            pixels.count = expanded
+        }
+        // Data COW ensures previously submitted images/baselines cannot be mutated by later deltas.
+        var result = base == 0 ? Data(count: count) : previous!
+        var bigSequence = sequence.bigEndian
+        result.withUnsafeMutableBytes { dst in
+            _ = withUnsafeBytes(of: &bigSequence) { memcpy(dst.baseAddress!, $0.baseAddress!, 8) }
+            if expanded > 0 { pixels.withUnsafeBytes { src in
+                for row in 0..<h {
+                    memcpy(dst.baseAddress!.advanced(by: 8 + ((y + row) * width + x) * 4),
+                        src.baseAddress!.advanced(by: row * w * 4), w * 4)
+                }
+            } }
+        }
+        return result
     }
 }
 
