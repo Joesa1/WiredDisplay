@@ -355,7 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
         let controller = WKUserContentController()
         controller.add(self, name: "thunderDisplay")
-        controller.addUserScript(WKUserScript(source: "if (localStorage.getItem('tb-mvp-data-version') !== '3') { localStorage.removeItem('tb-mvp-connected'); localStorage.setItem('tb-mvp-data-version', '3'); }", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        controller.addUserScript(WKUserScript(source: "if (localStorage.getItem('tb-mvp-data-version') !== '4') { localStorage.removeItem('tb-mvp-connected'); localStorage.setItem('tb-mvp-data-version', '4'); }", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         controller.addUserScript(WKUserScript(source: nativeBridgeScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
@@ -493,6 +493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             version(version, protocol) {
               senderVersion = version;
               senderProtocol = protocol;
+              resolveInitialDevice();
               window.__thunderDisplayVersion = { version, protocol };
               const local = document.getElementById('sidebar-local-version');
               if (local) local.textContent = `本机 v${version}`;

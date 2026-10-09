@@ -549,6 +549,7 @@
     let connectedId = null;
     let selectedId = devices.some((device) => device.id === localStorage.getItem('tb-mvp-selected'))
       ? localStorage.getItem('tb-mvp-selected') : null;
+    let initialDeviceResolved = false;
     let localRole = localStorage.getItem('tb-mvp-local-role') || 'host';
     let outputMode = localStorage.getItem('tb-mvp-output-mode') || 'extend';
     let audioRelay = localStorage.getItem('tb-mvp-audio-relay') !== 'false';
@@ -623,6 +624,15 @@
       localStorage.setItem('tb-mvp-prevent-sleep', String(preventSleep));
       localStorage.setItem('tb-mvp-showing-local', String(showingLocal));
       localStorage.setItem('tb-mvp-data-version', '4');
+    }
+    function resolveInitialDevice() {
+      if (initialDeviceResolved || connectedId || localRole !== 'host') return;
+      initialDeviceResolved = true;
+      const compatible = devices.find((device) => String(device.protocolVersion || '') === String(senderProtocol));
+      if (!compatible || compatible.id === selectedId) return;
+      selectedId = compatible.id;
+      showingLocal = false;
+      persist();
     }
     function showToast(message) { $('#toast-text').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2800); }
 

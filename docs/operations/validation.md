@@ -112,3 +112,9 @@ xcrun swiftc -swift-version 5 Sources/TouchBarProviders.swift Sources/TouchBarMe
 Passed: `LosslessDemoCheck`, `TransportCheck`, `VideoModesCheck` including Display P3 and local Main10, `TouchBarProvidersTests`, `TouchBarLifecycleTests`, `TouchBarHTTPTests.py`, `TouchBarBrowser.cjs`, desktop/mobile HTML syntax and plist validation. `build.sh` produced `0.7.4 (23)` arm64 and x86_64 ZIPs; each extracted app had the expected single architecture and passed strict signature verification.
 
 No physical dual-Mac Demo 3 capture, actual Intel Mac runtime, iPhone Safari, player Automation authorization, or hardware control result is claimed by this local validation.
+
+## 0.7.5 stale-device recovery candidate
+
+2026-10-09: The runtime cache marker now agrees with the page marker (`4`). When a host starts with an old selected device record and another saved device has the current protocol from a successful handshake, the page selects that compatible device once. It preserves all saved devices and pairing credentials, and never overrides a later manual selection. Wire protocol remains `5`.
+
+Passed: `TouchBarBrowser.cjs` covers a persisted protocol 2 selection together with a saved protocol 5 peer and verifies the protocol 5 peer becomes the initial target. The final arm64 ZIP was launched from a clean extraction on 2026-10-09: `10.10.10.2` completed TCP, pairing and receiver-profile exchange with `10.10.10.4:54321`, returning `2048 × 1152`. The temporary extracted bundle did not have Screen Recording permission, so this result validates discovery and handshake only, not video capture.
