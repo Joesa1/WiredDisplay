@@ -96,6 +96,11 @@ final class TouchBarService {
             guard let path = Bundle.main.url(forResource: "touch-bar", withExtension: "html"), let page = try? Data(contentsOf: path) else { respond(503, ["message": "手机页面资源缺失"]); return }
             reply(TouchBarResponse(status: 200, contentType: "text/html; charset=utf-8", body: page)); return
         }
+        if request.method == "GET", request.uri.hasPrefix("/assets/") {
+            let components = request.uri.split(separator: "/").map(String.init)
+            guard components.count == 3, ["apps", "touchbar"].contains(components[1]), components[2].hasSuffix(".png"), !components[2].contains(".."), let path = Bundle.main.url(forResource: String(components[2].dropLast(4)), withExtension: "png", subdirectory: "TouchBarAssets/\(components[1])"), let data = try? Data(contentsOf: path) else { respond(404, ["message": "资源不存在"]); return }
+            reply(TouchBarResponse(status: 200, contentType: "image/png", body: data)); return
+        }
         var payload: [String: Any] = [:]
         if request.method == "POST" {
             guard headers["content-type"]?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json", let object = try? JSONSerialization.jsonObject(with: request.body), let dictionary = object as? [String: Any] else { respond(400, ["message": "需要有效 JSON 请求"]); return }
