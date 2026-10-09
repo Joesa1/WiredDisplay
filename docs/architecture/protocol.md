@@ -8,7 +8,7 @@
 
 协议 3 为 `DisplayProfile` 增加 `wideGamut`，为 `VideoConfiguration` 增加必需的 `mode`、`colorSpace`。`lowLatency` 使用 sRGB / 8-bit，`fidelity` 使用 HEVC Main10 / 10-bit，`lossless` 使用无视频编码的 BGRA8，后两档按接收屏幕色域选 sRGB 或 Display P3。三档均为 SDR、sRGB 传递函数；YUV 档明确使用 BT.709 矩阵。Display P3 原色与 BT.709 矩阵是不同字段。
 
-`video` 在压缩档仍为 BE64 序号加编码数据；在无损档为 BE64 序号加逐行紧密排列的 BGRA8（不含行 padding），长度必须严格等于 `8 + width * height * 4`。无损配置不带 parameter sets，也不创建视频解码器。最大包长为 64 MiB，覆盖最大支持的 5120×2880 BGRA8；JSON 仍限制 256 KiB。无损与 Demo 3 帧预算为一帧，其他档位为三帧或其各自实验上限，ACK 仍表示接收端提交显示。
+`video` 在压缩档仍为 BE64 序号加编码数据；在无损档为 BE64 序号加逐行紧密排列的 BGRA8（不含行 padding），长度必须严格等于 `8 + width * height * 4`。无损配置不带 parameter sets，也不创建视频解码器。最大包长为 64 MiB，覆盖最大支持的 5120×2880 BGRA8；JSON 仍限制 256 KiB。无损与 Demo 3 帧预算为一帧，Demo 1/2 与待实现的 Duet 模式为两帧，其他档位为三帧，ACK 仍表示接收端提交显示。
 
 ## 帧格式
 
@@ -92,3 +92,7 @@
 Demo video payload: BE64 sequence, BE64 base sequence, u8 compression (0 raw, 1 LZ4), BE32 x/y/width/height, BE32 expanded byte count, then region bytes. The fixed header is 37 bytes. Full frames use base 0 and the whole configured rectangle. Delta frames must name the previous decoded sequence. An unchanged frame has a zero rectangle and empty raw payload. Expanded bytes must equal rectangle width × height × 4, with dimensions bounded by the negotiated profile before decompression. Compressed data must decode exactly and consume the entire input.
 
 Demo 1 compares pixels against the last transmitted frame (not the previous capture), preserving changes across skipped captures; one bounding rectangle is the initial minimal region representation. Demo 2 always sends full frames. Protocol 5 adds Demo 3: it uses the ScreenCaptureKit dirty-rect attachment, unions valid clamped pixel rectangles, and otherwise sends a full keyframe. A capture skipped by Demo 3's one-frame budget invalidates the dirty-rect baseline, so the next packet is forced to a complete keyframe. Demo 3 has one in-flight frame; Demo 1 and Demo 2 have two. Use native LZ4 only when smaller than raw. Receiver reconstructs a new immutable complete image before presentation; render skipping never skips delta reconstruction. Invalid ancestry/length/coordinates/compression ends the session. New sessions reset the baseline and start full.
+
+## Planned protocol 6: Duet mode
+
+Protocol 6 adds `TransmissionMode.duet`. It requires HEVC and uses Main10/10-bit x420, the existing `VideoConfiguration.colorSpace` and parameter-set framing. It differs from `fidelity` through a separate high-rate encoder policy, a one-second keyframe interval, two unacknowledged frames and a one-surface capture queue; it remains a lossy 4:2:0 video stream. It adds no packet kind, pairing field, input event, UDP path or compatibility bridge. A protocol 5 peer must reject the protocol 6 `hello` before configuration.

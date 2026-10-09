@@ -11,6 +11,7 @@
 | 低延迟 SDR | 8-bit NV12，HEVC Main 或 H.264 High；速度优先，40–150 Mbit/s 目标码率按像素数计算 | sRGB，有损，60fps 上限 |
 | 色彩保真 | 10-bit x420，硬件 HEVC Main10；40–300 Mbit/s 目标码率按像素数计算 | 保留 10-bit 解码输出，sRGB/Display P3 SDR；仍为有损 4:2:0，不支持时报错 |
 | 无损 RGB | BGRA8 逐像素原样传输，不经视频编解码；一帧在途 | 原始采集像素到接收缓冲逐字节一致；8-bit 采集仍可能有色带，不是 HDR 或物理面板一致性承诺 |
+| Duet 模式（待实现） | 硬件 HEVC Main10、10-bit x420、高码率、色彩元数据贯通；两帧在途 | sRGB/Display P3 SDR，有损但色彩优先；仅保留最新可显示帧，不承诺 4:4:4、HDR、固定 60fps 或 RGB 字节一致 |
 
 接收侧沿用 AVSampleBufferDisplayLayer，通过明确的 CVPixelBuffer 色彩附件交给系统色彩管理，不另建 Metal 渲染器。协议中的色彩空间描述流内容，不替换物理显示器 ICC。链路繁忙时跳过新采集帧，界面报告实际确认帧率。
 
@@ -91,3 +92,7 @@ Demo 1 adds a changed bounding rectangle and native LZ4; Demo 2 adds only native
 ## 0.7.3 Demo 3: system dirty rectangles
 
 Demo 3 reuses exact BGRA8 and native LZ4, but obtains changed rectangles from `SCStreamFrameInfoDirtyRects` rather than comparing every pixel on the CPU. It uses the valid rectangles' clamped union and transmits it as the existing lossless region payload. Missing, empty or invalid metadata falls back to a complete frame, preserving correctness. If the one-frame budget skips a capture sample, its successor is sent as a complete keyframe because the system dirty rect only describes the immediately preceding capture. Demo 3 has one frame in flight and `SCStreamConfiguration.queueDepth = 1`; all other modes retain their existing queue behavior. It keeps ScreenCaptureKit's captured system cursor and existing P3/sRGB attachments. A distant set of dirty rectangles can still union to almost the whole screen; tiled payloads are deliberately out of scope.
+
+## Planned Duet mode
+
+The planned Duet mode is a separate hardware HEVC Main10 policy, not an implementation or protocol copy from any other product. It uses 10-bit x420 with explicit sRGB/Display P3, SDR transfer and BT.709 matrix metadata; real-time encoding without frame reordering; a bounded high target rate; at most two unacknowledged frames; and `ScreenCaptureKit.queueDepth = 1`. The surface already keeps only the newest decoded frame. This reduces full-screen-motion pressure relative to raw RGB but remains a lossy 4:2:0 stream. It does not add independent mouse packets, receiver-to-host input injection, UDP or a new security handshake. The design evidence and deliberate limits are recorded in `docs/research/duet-local-transport-analysis.md` and `docs/plan/analysis/duet-mode-001.md`.
