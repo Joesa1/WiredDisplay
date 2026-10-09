@@ -17,8 +17,8 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 5
-    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.6"
+    static let protocolVersion = 6
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.7"
     static let maximumPacket = 64 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
         var data = Data()
@@ -148,6 +148,7 @@ struct VideoConfiguration: Codable {
     func validate() throws {
         try DisplayProfile(width: width, height: height, hiDPI: false, hevc: hevc, appVersion: nil).validate()
         guard mode != .fidelity || hevc,
+              mode != .duet || hevc,
               mode != .lowLatency || colorSpace == .sRGB,
               !mode.isRGB || (!hevc && parameterSets.isEmpty) else {
             throw WireError.invalid("Invalid video mode configuration")
@@ -156,7 +157,7 @@ struct VideoConfiguration: Codable {
 }
 
 enum TransmissionMode: String, Codable, CaseIterable {
-    case lowLatency, fidelity, lossless, demo1, demo2, demo3
+    case lowLatency, fidelity, lossless, demo1, demo2, demo3, duet
 
     var isDemo: Bool { self == .demo1 || self == .demo2 || self == .demo3 }
     var isRGB: Bool { self == .lossless || isDemo }
@@ -166,12 +167,19 @@ enum TransmissionMode: String, Codable, CaseIterable {
         case .lossless, .demo3: return 1
         case .demo1, .demo2: return 2
         case .lowLatency, .fidelity: return 3
+        case .duet: return DuetModePolicy.frameBudget
         }
     }
 
     func bitrate(width: Int, height: Int) -> Int {
-        min(self == .fidelity ? 300_000_000 : 150_000_000,
-            max(40_000_000, width * height * (self == .fidelity ? 20 : 10)))
+        let cap: Int
+        let bitsPerPixel: Int
+        switch self {
+        case .fidelity: cap = 300_000_000; bitsPerPixel = 20
+        case .duet: cap = 280_000_000; bitsPerPixel = 18
+        default: cap = 150_000_000; bitsPerPixel = 10
+        }
+        return min(cap, max(40_000_000, width * height * bitsPerPixel))
     }
 }
 

@@ -27,7 +27,7 @@
 
 ```sh
 xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h \
-  Sources/Wire.swift Sources/Cable.swift Sources/Video.swift Tests/VideoModesCheck.swift \
+  Sources/DuetMode.swift Sources/Wire.swift Sources/Cable.swift Sources/Video.swift Tests/VideoModesCheck.swift \
   -o /private/tmp/thunder-video-modes-check -framework AppKit -framework ScreenCaptureKit \
   -framework VideoToolbox -framework AVFoundation -framework Network -framework SystemConfiguration
 /private/tmp/thunder-video-modes-check
@@ -77,7 +77,7 @@ xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h \
 ## 0.7.1 lossless comparison demos
 
 ```sh
-xcrun swiftc -O Sources/Wire.swift Tests/LosslessDemoCheck.swift -o /private/tmp/thunder-lossless-demo-check
+xcrun swiftc -O Sources/DuetMode.swift Sources/Wire.swift Tests/LosslessDemoCheck.swift -o /private/tmp/thunder-lossless-demo-check
 /private/tmp/thunder-lossless-demo-check
 ```
 

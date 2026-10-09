@@ -30,6 +30,10 @@ import Network
         rejects { _ = try RawFrame.byteCount(width: Int.max, height: 480) }
         rejects { _ = try RawFrame.byteCount(width: 641, height: 480) }
         rejects { try VideoConfiguration(width: 640, height: 480, hevc: false, parameterSets: [], mode: .fidelity).validate() }
+        rejects { try VideoConfiguration(width: 640, height: 480, hevc: false, parameterSets: [], mode: .duet).validate() }
+        precondition(TransmissionMode.duet.frameLimit == 2)
+        precondition(TransmissionMode.duet.bitrate(width: 3840, height: 2160) == 149_299_200)
+        precondition(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .duet).decodedPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
 
         // Odd row alignment exercises stripping and restoring CoreVideo padding.
         for (width, height) in [(642, 480), (4480, 2520)] {
@@ -125,7 +129,7 @@ import Network
             CVPixelBufferGetBaseAddressOfPlane(input, plane)!.assumingMemoryBound(to: UInt16.self).initialize(repeating: 512 << 6, count: count)
         }
         CVPixelBufferUnlockBaseAddress(input, [])
-        VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .fidelity, colorSpace: .displayP3).attachColor(to: input)
+        VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .duet, colorSpace: .displayP3).attachColor(to: input)
         var encoded: CMSampleBuffer?
         try check(VTCompressionSessionEncodeFrame(session, imageBuffer: input, presentationTimeStamp: .zero,
             duration: CMTime(value: 1, timescale: 60), frameProperties: nil, infoFlagsOut: nil) { status, _, sample in
@@ -148,7 +152,7 @@ import Network
             precondition(sequence == 1 && CVPixelBufferGetPixelFormatType(image) == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
             received = true
         }
-        try decoder.configure(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: sets, mode: .fidelity, colorSpace: .displayP3))
+        try decoder.configure(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: sets, mode: .duet, colorSpace: .displayP3))
         let block = CMSampleBufferGetDataBuffer(sample)!, count = CMBlockBufferGetDataLength(block)
         var packet = Data()
         Wire.append(UInt64(1), to: &packet)

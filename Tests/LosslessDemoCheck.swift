@@ -81,7 +81,7 @@ import Foundation
             _ = try budget.acknowledge(UInt64(mode.frameLimit), now: 1)
             precondition(budget.reserve(now: 2) != nil)
         }
-        precondition(TransmissionMode.lossless.frameLimit == 1 && TransmissionMode.demo1.frameLimit == 2 && TransmissionMode.demo2.frameLimit == 2 && TransmissionMode.demo3.frameLimit == 1)
+        precondition(TransmissionMode.lossless.frameLimit == 1 && TransmissionMode.demo1.frameLimit == 2 && TransmissionMode.demo2.frameLimit == 2 && TransmissionMode.demo3.frameLimit == 1 && TransmissionMode.duet.frameLimit == 2)
         try checkSystemDirtyRects()
         print("PASS: demo exact pixels, sparse/skipped/cursor/unchanged/full updates, system dirty rect fallback, raw fallback, immutable baseline, reset, bounded budgets, corrupt ancestry/length/LZ4 rejection")
     }

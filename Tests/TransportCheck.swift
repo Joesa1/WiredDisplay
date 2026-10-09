@@ -76,6 +76,10 @@ import Darwin
         try demo3.validate()
         let decodedDemo3 = try Wire.decode(VideoConfiguration.self, Wire.json(demo3))
         precondition(decodedDemo3.mode == .demo3)
+        let duet = VideoConfiguration(width: 2560, height: 1440, hevc: true, parameterSets: [], mode: .duet, colorSpace: .displayP3)
+        try duet.validate()
+        let decodedDuet = try Wire.decode(VideoConfiguration.self, Wire.json(duet))
+        precondition(decodedDuet.mode == .duet && decodedDuet.hevc && decodedDuet.colorSpace == .displayP3)
         let frame = Wire.header(.hello, count: payload.count) + payload
         let fd = client()
         // Exercise split headers and bodies, then two frames in one TCP write.

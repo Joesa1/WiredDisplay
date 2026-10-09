@@ -1,7 +1,7 @@
 ---
 id: duet-mode-001
 scope: media / protocol / transmission-mode UI
-status: ready
+status: implemented
 depends-on: []
 ---
 
@@ -66,3 +66,7 @@ Hint              Color-managed, high bitrate, latest-frame delivery;
 ## Delivery
 
 Do not merge an unrelated PR, push a branch, create a GitHub release or delete existing packages in this task. Commit only the reviewed implementation and documentation after independent verification.
+
+## Implementation record
+
+Implemented 0.7.7 build 26 / protocol 6. Added `TransmissionMode.duet`, Main10 validation and pixel format selection, a two-frame budget, one-frame capture queue, realtime/no-reordering hardware encoder settings, 60-frame keyframe interval, bounded 18 bpp target bitrate (280 Mbps cap), UI persistence/hint, and the source-level research archive in `Sources/DuetMode.swift`. Existing raw RGB and Demo modes remain on their prior paths. Physical dual-Mac latency, color and reconnect behavior remain pending.
