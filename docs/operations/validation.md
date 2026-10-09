@@ -118,3 +118,10 @@ No physical dual-Mac Demo 3 capture, actual Intel Mac runtime, iPhone Safari, pl
 2026-10-09: The runtime cache marker now agrees with the page marker (`4`). When a host starts with an old selected device record and another saved device has the current protocol from a successful handshake, the page selects that compatible device once. It preserves all saved devices and pairing credentials, and never overrides a later manual selection. Wire protocol remains `5`.
 
 Passed: `TouchBarBrowser.cjs` covers a persisted protocol 2 selection together with a saved protocol 5 peer and verifies the protocol 5 peer becomes the initial target. The final arm64 ZIP was launched from a clean extraction on 2026-10-09: `10.10.10.2` completed TCP, pairing and receiver-profile exchange with `10.10.10.4:54321`, returning `2048 × 1152`. The temporary extracted bundle did not have Screen Recording permission, so this result validates discovery and handshake only, not video capture.
+
+
+## 0.7.6 release candidate
+
+2026-10-09: Integrates the latest Touch Bar v4 runtime and static control-strip assets, keeps protocol 5, and fixes initial device recovery so a compatible saved peer can be resolved after a delayed peer update without overriding a manual selection.
+
+Validation scope: source tests and package checks must pass before release. The Touch Bar browser fixture must target the v4 DOM and exercise the `appsRevision` delta path. Physical Screen Recording permission and Intel runtime remain hardware checks.

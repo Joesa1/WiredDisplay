@@ -485,6 +485,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 receiverVersion: peer.version || device.receiverVersion || null, protocolVersion: senderProtocol || device.protocolVersion || null,
                 detail: `雷雳桥接 · ${peer.address || device.ip || '地址待发现'} · ${peer.code ? '配对凭据已保存' : '等待首次配对'}` });
               if (!selectedId) selectedId = device.id;
+              resolveInitialDevice();
               persist(); renderDevices();
             },
             metrics(stats) {

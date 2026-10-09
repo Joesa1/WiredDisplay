@@ -627,9 +627,10 @@
     }
     function resolveInitialDevice() {
       if (initialDeviceResolved || connectedId || localRole !== 'host') return;
-      initialDeviceResolved = true;
       const compatible = devices.find((device) => String(device.protocolVersion || '') === String(senderProtocol));
-      if (!compatible || compatible.id === selectedId) return;
+      if (!compatible) return;
+      initialDeviceResolved = true;
+      if (compatible.id === selectedId) return;
       selectedId = compatible.id;
       showingLocal = false;
       persist();
@@ -788,6 +789,7 @@
     }
     function selectDevice(id, announce) {
       if (connectedId && id !== connectedId) return;
+      initialDeviceResolved = true;
       showingLocal = false; selectedId = id; persist(); showPage('current-device'); renderDevices();
       if (announce) showToast(`已选择 ${selected().name}`);
     }

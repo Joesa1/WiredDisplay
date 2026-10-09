@@ -26,6 +26,7 @@ for architecture in arm64 x86_64; do
     ditto --norsrc Resources/TouchBarAssets "$app/Contents/Resources/TouchBarAssets"
     mkdir -p "$app/Contents/Resources/DeviceAssets/Apple/iMac"
     ditto --norsrc Resources/DeviceAssets/Apple/iMac/transparent "$app/Contents/Resources/DeviceAssets/Apple/iMac/transparent"
+    xattr -cr "$app"
     codesign --force --sign "${WIRED_SIGN_IDENTITY:--}" --identifier local.wired-display.app "$app"
     codesign --verify --deep --strict "$app"
     ditto -c -k --sequesterRsrc --keepParent "$app" "dist/ThunderDisplay-$architecture.zip"
