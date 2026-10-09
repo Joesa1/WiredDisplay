@@ -16,7 +16,9 @@ import Foundation
  This implementation therefore uses only the verified local Thunder Display
  contract: Thunderbolt Bridge TCP, hardware HEVC Main10, explicit sRGB or Display
  P3 metadata, realtime/no-reordering encoding, one capture surface, two frames in
- flight, and latest-frame presentation. It deliberately does not add UDP, mTLS,
+ flight, and bounded-freshness presentation. The receiver presents the newest
+ decoded frame available to it; when the sender budget is full, a new capture is
+ skipped rather than queued without bound. It deliberately does not add UDP, mTLS,
  FEC, a new pairing format, raw RGB fallback, or a separate cursor channel.
  Duet is color-managed and lossy; it is not byte-for-byte RGB lossless.
  */

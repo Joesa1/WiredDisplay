@@ -83,17 +83,17 @@ xcrun swiftc -O Sources/DuetMode.swift Sources/Wire.swift Tests/LosslessDemoChec
 
 Covers exact BGRA reconstruction for full/sparse/cursor/unchanged updates, changes accumulated across skipped captures, raw fallback for incompressible data, immutable baseline snapshots, connection reset, bounded frame budgets, and rejection of malformed/truncated/trailing/over-expanding compressed data and wrong ancestry. `VideoModesCheck` also exercises both demos with padded CoreVideo rows, 4.5K pixels, P3 tags, and retained submitted buffers that must not change during later updates.
 
-Both endpoints must run 0.7.4 protocol 5. Compare the original lossless mode and all three demos on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
+Historical 0.7.4 protocol-5 candidate instructions. Current physical comparisons must use both endpoints on 0.7.7 protocol 6. Compare the original lossless mode, all three demos and Duet on the same panel-native resolution, desktop content and audio settings. Record stationary cursor, typing, small window movement, fullscreen scrolling and video separately, with FPS, bandwidth, subjective lag and CPU/memory. Do not count synthetic codec checks as a dual-Mac latency result. User hardware comparison remains pending.
 
 Demo 3 local verification must cover ScreenCaptureKit dirty-rect union, missing/empty/invalid metadata falling back to a complete keyframe, exact BGRA reconstruction, forced complete recovery after a budget-skipped capture and its one-frame budget. `queueDepth = 1` is a source-level contract; local checks do not simulate a physical capture queue.
 
-## 0.7.2 integrated local candidate
+## Historical 0.7.2 integrated local candidate
 
 2026-10-08: PR #4 Touch Bar is integrated with the existing PR #3 / #5 baseline. PR #2 captured-cursor semantics were already present (system cursor remains captured, standalone pointer timer remains removed). Both architectures identify as 0.7.2 build 21, wire protocol 4. No panel catalog, product asset, display geometry or video pipeline change was introduced by the Touch Bar integration.
 
 Passed: TransportCheck, LosslessDemoCheck, VideoModesCheck (including local HEVC Main10), TouchBarProvidersTests, TouchBarLifecycleTests, TouchBarHTTPTests.py, and TouchBarBrowser.cjs. Lifecycle regression deterministically queues an action behind a barrier before revocation, and simulates successful permission return after reset/stop/reconfiguration without executing OS controls. HTTP regression changes the injected address provider between requests and verifies the new Host is accepted while old/unrelated Hosts remain rejected. Browser fixtures cover pairing, permission UI, controls, revocation, three landscape sizes, desktop Touch Bar navigation and the five modes present in 0.7.2.
 
-## 0.7.3 Demo 3 candidate
+## Historical 0.7.3 Demo 3 candidate
 
 2026-10-08 local verification: `LosslessDemoCheck`, `VideoModesCheck`, `TransportCheck`, HTML script syntax and `Info.plist` validation passed. The dirty-rect tests cover clamped union, full-keyframe fallback for missing/empty/invalid metadata, exact BGRA reconstruction and the one-frame budget. `queueDepth = 1` is source-checked. `TouchBarBrowser.cjs` was not run because this worktree has no `playwright` package. Existing SDK deprecation warnings remain. No physical ScreenCaptureKit dirty-rect capture, dual-Mac latency or Intel runtime result is claimed.
 
@@ -105,7 +105,7 @@ xcrun swiftc -swift-version 5 Sources/TouchBarProviders.swift Sources/TouchBarMe
 /private/tmp/thunder-touchbar-lifecycle
 ```
 
-## 0.7.4 latest local candidate
+## Historical 0.7.4 local candidate
 
 2026-10-08: Includes the already-integrated cursor, per-device mode, lossless demo and Touch Bar work, plus the latest Touch Bar UI/Agent refinement. Application icons are sent on the first `appsRevision` response; one-second polling then carries only compact running/active state until the app list changes.
 
@@ -113,15 +113,19 @@ Passed: `LosslessDemoCheck`, `TransportCheck`, `VideoModesCheck` including Displ
 
 No physical dual-Mac Demo 3 capture, actual Intel Mac runtime, iPhone Safari, player Automation authorization, or hardware control result is claimed by this local validation.
 
-## 0.7.5 stale-device recovery candidate
+## Historical 0.7.5 stale-device recovery candidate
 
 2026-10-09: The runtime cache marker now agrees with the page marker (`4`). When a host starts with an old selected device record and another saved device has the current protocol from a successful handshake, the page selects that compatible device once. It preserves all saved devices and pairing credentials, and never overrides a later manual selection. Wire protocol remains `5`.
 
 Passed: `TouchBarBrowser.cjs` covers a persisted protocol 2 selection together with a saved protocol 5 peer and verifies the protocol 5 peer becomes the initial target. The final arm64 ZIP was launched from a clean extraction on 2026-10-09: `10.10.10.2` completed TCP, pairing and receiver-profile exchange with `10.10.10.4:54321`, returning `2048 × 1152`. The temporary extracted bundle did not have Screen Recording permission, so this result validates discovery and handshake only, not video capture.
 
 
-## 0.7.6 release candidate
+## Historical 0.7.6 release candidate
 
 2026-10-09: Integrates the latest Touch Bar v4 runtime and static control-strip assets, keeps protocol 5, and fixes initial device recovery so a compatible saved peer can be resolved after a delayed peer update without overriding a manual selection.
 
 Validation scope: source tests and package checks must pass before release. The Touch Bar browser fixture must target the v4 DOM and exercise the `appsRevision` delta path. Physical Screen Recording permission and Intel runtime remain hardware checks.
+
+## 0.7.7 Duet candidate
+
+The current candidate is 0.7.7 build 26 / protocol 6. Both endpoints must run this protocol before testing Duet or any existing mode. Run `LosslessDemoCheck`, `TransportCheck`, `VideoModesCheck`, HTML syntax validation, `Info.plist` validation and `./build.sh`; inspect both architecture packages for version/build, single architecture and strict signature verification. The local checks cover Main10 configuration and loopback encode/decode only. Physical dual-Mac color, latency, capture, reconnect and Intel runtime results remain pending.

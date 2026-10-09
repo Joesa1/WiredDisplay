@@ -138,7 +138,7 @@ general display transport architecture.
 1. Capture through ScreenCaptureKit into `CVPixelBuffer`/`IOSurface`.
 2. Query the local encoder and remote decoder capabilities at connection time.
 3. Prefer hardware HEVC with realtime operation, no frame reordering, bounded
-   keyframe interval, bounded rate, and one latest-frame slot.
+   keyframe interval, bounded rate, and one bounded-freshness frame slot.
 4. Carry the captured color primaries, transfer function, matrix, range, and
    sRGB/Display-P3 intent through the encoder, protocol, decoder, and Metal
    presentation path.
@@ -165,7 +165,7 @@ Receiver input -> separate control path -> host event injection
 | User-facing mode | Technical policy | Best use | Explicit cost |
 | --- | --- | --- | --- |
 | Color accurate | Hardware HEVC, color-managed, high bitrate, per-pair capability choice | Design, photo, normal desktop | Not byte-identical; 4:4:4 depends on hardware support. |
-| Smooth | Hardware HEVC, lower bitrate/resolution ceiling, latest-frame policy | Video, scrolling, motion | More compression artifacts. |
+| Smooth | Hardware HEVC, lower bitrate/resolution ceiling, bounded-freshness policy | Video, scrolling, motion | More compression artifacts; a full sender budget can skip a newly captured frame. |
 | RGB reference | Existing raw/lossless route, strict single-frame budget | Static inspection and screenshots | Full-screen motion is intentionally not a supported workflow. |
 
 ## What Must Be Measured Before Implementation

@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | 编码 | 仅硬件 HEVC Main10；不支持时明确失败 | 不静默降级到 8-bit 或 raw RGB。 |
 | 色彩 | 10-bit x420，sRGB/Display P3 原色、传递函数和 BT.709 矩阵显式贯通 | 不宣称 4:4:4、HDR、ICC 一致或字节级 RGB 无损。 |
-| 新鲜度 | 两帧在途、一个捕获 surface、呈现端始终保留最新可显示帧 | 不承诺固定 60 fps 或固定毫秒延迟。 |
+| 新鲜度 | 两帧有界在途、一个捕获 surface；接收端从已解码帧中呈现最新可显示帧，预算满时跳过新采集样本 | 不承诺固定 60 fps 或固定毫秒延迟，也不声称网络中永远只保留最新帧。 |
 | 码率 | 与色彩保真分开配置，采用较高但有上限的 HEVC 目标码率 | 不以名义雷雳带宽作为可达帧率承诺。 |
 | 光标 | 保留 `ScreenCaptureKit.showsCursor`，光标随画面采集 | 不新增独立鼠标传输或接收端向主机注入事件。 |
 | 传输 | 复用已验证的 Thunderbolt Bridge TCP 会话 | 不在本任务更换为 UDP、mTLS 或私有协议。 |
@@ -34,7 +34,7 @@ HEVC Main10 hardware encoder
   realtime / no frame reorder / bounded rate
           |
           v
-2 in-flight frames -> existing TCP -> hardware decoder -> latest-frame present
+2 bounded in-flight frames -> existing TCP -> hardware decoder -> newest decoded frame present
 ```
 
 两帧而不是一帧是刻意选择：一帧会把可达帧率直接限制在一次显示确认往返之下；两帧仍有严格上限，又能避免常见的 16–33 ms 确认时间把流量压成低帧率。满额时丢弃新采集样本而不堆积旧画面。
@@ -48,7 +48,7 @@ Host controls
   Resolution        [Native panel / 4K compatible]
 
 Active Duet mode
-  HEVC Main10 · sRGB or Display P3 · high bitrate · latest frame
+  HEVC Main10 · sRGB or Display P3 · high bitrate · bounded freshness
 ```
 
 - 在 `TransmissionMode` 增加 `duet`，每台设备继续保存选择。

@@ -9,7 +9,7 @@ depends-on: []
 
 ## Objective
 
-Add an explicitly named `Duet mode` alongside all existing transmission modes. It must use a high-quality, color-managed hardware HEVC Main10 path with bounded latest-frame delivery. Preserve all current modes, panel geometry, pairing, TCP transport, captured system cursor and device-specific settings.
+Add an explicitly named `Duet mode` alongside all existing transmission modes. It must use a high-quality, color-managed hardware HEVC Main10 path with bounded freshness. The receiver presents the newest decoded frame available to it; when the sender budget is full, new captures are skipped rather than queued without bound. Preserve all current modes, panel geometry, pairing, TCP transport, captured system cursor and device-specific settings.
 
 ## Context
 
@@ -51,7 +51,7 @@ Add an explicitly named `Duet mode` alongside all existing transmission modes. I
 Transmission mode [Low latency SDR / Fidelity / Lossless RGB / Demo 1 /
                    Demo 2 / Demo 3 / Duet mode: 10-bit HEVC]
 Resolution        [Native panel / 4K compatible]
-Hint              Color-managed, high bitrate, latest-frame delivery;
+Hint              Color-managed, high bitrate, bounded freshness;
                   not RGB byte-for-byte lossless.
 ```
 
@@ -69,4 +69,4 @@ Do not merge an unrelated PR, push a branch, create a GitHub release or delete e
 
 ## Implementation record
 
-Implemented 0.7.7 build 26 / protocol 6. Added `TransmissionMode.duet`, Main10 validation and pixel format selection, a two-frame budget, one-frame capture queue, realtime/no-reordering hardware encoder settings, 60-frame keyframe interval, bounded 18 bpp target bitrate (280 Mbps cap), UI persistence/hint, and the source-level research archive in `Sources/DuetMode.swift`. Existing raw RGB and Demo modes remain on their prior paths. Physical dual-Mac latency, color and reconnect behavior remain pending.
+Implemented 0.7.7 build 26 / protocol 6. Added `TransmissionMode.duet`, Main10 validation and pixel format selection, a two-frame bounded freshness budget, one-frame capture queue, realtime/no-reordering hardware encoder settings, 60-frame keyframe interval, bounded 18 bpp target bitrate (280 Mbps cap), UI persistence/hint, and the source-level research archive in `Sources/DuetMode.swift`. Existing raw RGB and Demo modes remain on their prior paths. Physical dual-Mac latency, color and reconnect behavior remain pending.

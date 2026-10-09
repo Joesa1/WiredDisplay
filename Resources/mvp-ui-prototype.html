@@ -670,7 +670,7 @@
         demo2: '实验：最多两帧在途，LZ4 无损压缩整帧；保留原始 RGB 和随画面光标。与 Demo 1 仅区域更新不同。',
         demo3: '实验：仅一帧在途，使用系统报告的变化区域和 LZ4 无损压缩；缺少有效变化区域时发送完整 RGB 帧。保留原始 RGB 和随画面光标。',
         lossless: '采集后的 8-bit RGB 像素原样传输；带宽与内存负载高，实际帧率受链路限制。不能消除面板自身色差。',
-        duet: 'Duet 模式：硬件 HEVC Main10、sRGB 或 Display P3 色彩元数据、两帧在途和最新帧优先。高色彩还原但仍是有损编码，不是 RGB 字节级无损。'
+        duet: 'Duet 模式：硬件 HEVC Main10、sRGB 或 Display P3 色彩元数据、两帧有界在途。接收端展示已解码帧中的最新一帧，预算满时跳过新采集帧，不无限排队。高色彩还原但仍是有损编码，不是 RGB 字节级无损。'
       }[targetTransmissionMode()];
       $('#receiver-config').hidden = isHost;
       const target = selected();
