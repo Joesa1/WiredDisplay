@@ -22,6 +22,7 @@ for architecture in arm64 x86_64; do
     cp -X LICENSE-TargetBridge.txt "$app/Contents/Resources/"
     cp -X Resources/mvp-ui-prototype.html Resources/touch-bar.html "$app/Contents/Resources/"
     cp -X Resources/IconOne.png Resources/IconTwo.png Resources/AppIcon.icns "$app/Contents/Resources/"
+    ditto --norsrc Resources/TouchBarAssets "$app/Contents/Resources/TouchBarAssets"
     mkdir -p "$app/Contents/Resources/DeviceAssets/Apple/iMac"
     ditto --norsrc Resources/DeviceAssets/Apple/iMac/transparent "$app/Contents/Resources/DeviceAssets/Apple/iMac/transparent"
     codesign --force --sign "${WIRED_SIGN_IDENTITY:--}" --identifier local.wired-display.app "$app"
