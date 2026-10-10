@@ -8,7 +8,7 @@
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.7.7</string>
-<key>CFBundleVersion</key><string>26</string>
+<key>CFBundleVersion</key><string>27</string>
 <key>LSMinimumSystemVersion</key><string>12.3</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSScreenCaptureUsageDescription</key><string>将扩展桌面通过雷雳线显示在另一台 Mac。</string>
