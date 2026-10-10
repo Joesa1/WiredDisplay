@@ -1,7 +1,7 @@
 ---
 id: duet-hevc-fallback-001
 scope: media / encoder startup
-status: in-progress
+status: done
 depends-on: []
 ---
 
