@@ -11,7 +11,7 @@
 | 低延迟 SDR | 8-bit NV12，HEVC Main 或 H.264 High；速度优先，40–150 Mbit/s 目标码率按像素数计算 | sRGB，有损，60fps 上限 |
 | 色彩保真 | 10-bit x420，硬件 HEVC Main10；40–300 Mbit/s 目标码率按像素数计算 | 保留 10-bit 解码输出，sRGB/Display P3 SDR；仍为有损 4:2:0，不支持时报错 |
 | 无损 RGB | BGRA8 逐像素原样传输，不经视频编解码；一帧在途 | 原始采集像素到接收缓冲逐字节一致；8-bit 采集仍可能有色带，不是 HDR 或物理面板一致性承诺 |
-| Duet 模式 | 硬件 HEVC Main10、10-bit x420、18 bpp 目标码率（上限 280 Mbit/s）、色彩元数据贯通；两帧在途 | sRGB/Display P3 SDR，有损但色彩优先；单采集 surface、无帧重排、60 帧关键帧上限；不承诺 4:4:4、HDR、固定 60fps 或 RGB 字节一致 |
+| Duet 模式 | 优先硬件 HEVC Main10、10-bit x420、18 bpp 目标码率（上限 280 Mbit/s）、色彩元数据贯通；两帧在途 | sRGB/Display P3 SDR，有损但色彩优先；单采集 surface、无帧重排、60 帧关键帧上限；不承诺 4:4:4、HDR、固定 60fps 或 RGB 字节一致 |
 
 接收侧沿用 AVSampleBufferDisplayLayer，通过明确的 CVPixelBuffer 色彩附件交给系统色彩管理，不另建 Metal 渲染器。协议中的色彩空间描述流内容，不替换物理显示器 ICC。链路繁忙时跳过新采集帧，界面报告实际确认帧率。
 
@@ -37,7 +37,9 @@ mirror mode: primary display ────┘          │
                                     CablePeer / Wire v6
 ```
 
-`ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。Duet 模式使用 `queueDepth = 1`、两帧预算、HEVC Main10、实时编码、关闭帧重排和 60 帧关键帧间隔。
+`ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。Duet 模式优先使用 `queueDepth = 1`、两帧预算、HEVC Main10、实时编码、关闭帧重排和 60 帧关键帧间隔。
+
+Duet 的 Main10 硬件编码器创建或配置失败时，发送端仅对当前会话重试一次普通 HEVC：有效 `TransmissionMode` 改为 `lowLatency`，采集改为 8-bit NV12，色彩空间为 sRGB，并按该有效模式发送 `VideoConfiguration`。这不是协议降级，协议版本、配对和接收端 HEVC 能力要求不变；它也不回退到 H.264、RGB 或软件编码。普通 HEVC 仍无法创建或配置时，保留真实 VideoToolbox 状态并失败终止。
 
 ## 显示器管线
 
@@ -76,7 +78,8 @@ audioConfiguration + audio
 | --- | --- |
 | 无屏幕录制权限 | `ScreenSender.start` 失败，`AppDelegate` 回到可恢复 UI。 |
 | 虚拟显示器创建失败 | 不启动采集或媒体发送。 |
-| 编码器/解码器配置失败 | 结束本次 peer，会话资源释放。 |
+| Duet Main10 编码器创建/配置失败 | 对当前会话重试一次普通 HEVC；其 `VideoConfiguration` 必须是 8-bit `lowLatency` / sRGB。 |
+| 普通 HEVC 或其他编码器/解码器配置失败 | 结束本次 peer，会话资源释放并保留真实状态码。 |
 | 视频窗口关闭 | 接收端表示停止显示，必须恢复鼠标、渲染和息屏状态。 |
 | socket 关闭 | 接收端停止 decoder/audio/surface，但 listener 保持运行。 |
 | 系统睡眠 | 使当前发送/接收会话失效；唤醒按应用生命周期规则恢复。 |
