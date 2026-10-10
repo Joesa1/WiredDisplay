@@ -39,6 +39,8 @@ import Network
         let fallback = VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: fallbackMode!, colorSpace: .sRGB)
         try fallback.validate()
         precondition(fallback.decodedPixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+        precondition(captureQueueDepth(for: fallbackMode!) == 3)
+        precondition(captureQueueDepth(for: .duet) == DuetModePolicy.captureQueueDepth)
         precondition(encoderFallbackMode(for: .lowLatency) == nil)
         precondition(encoderFallbackMode(for: .fidelity) == nil)
 

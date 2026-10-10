@@ -52,6 +52,10 @@ func encoderFallbackMode(for mode: TransmissionMode) -> TransmissionMode? {
     mode == .duet ? .lowLatency : nil
 }
 
+func captureQueueDepth(for mode: TransmissionMode) -> Int {
+    mode == .demo3 || mode == .duet ? DuetModePolicy.captureQueueDepth : 3
+}
+
 func makeFormat(_ config: VideoConfiguration) throws -> CMVideoFormatDescription {
     try config.validate()
     try DisplayProfile(width: config.width, height: config.height, hiDPI: true, hevc: config.hevc, appVersion: nil).validate()
@@ -453,7 +457,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         config.width = profile.width
         config.height = profile.height
         config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
-        config.queueDepth = mode == .demo3 || mode == .duet ? DuetModePolicy.captureQueueDepth : 3
+        config.queueDepth = captureQueueDepth(for: self.mode)
         config.pixelFormat = capturePixelFormat
         config.colorSpaceName = streamColorSpace == .displayP3 ? CGColorSpace.displayP3 : CGColorSpace.sRGB
         config.colorMatrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2
