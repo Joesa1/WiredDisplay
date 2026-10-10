@@ -53,7 +53,11 @@ func encoderFallbackMode(for mode: TransmissionMode) -> TransmissionMode? {
 }
 
 func captureQueueDepth(for mode: TransmissionMode) -> Int {
-    mode == .demo3 || mode == .duet ? DuetModePolicy.captureQueueDepth : 3
+    switch mode {
+    case .demo3: return 1
+    case .duet: return DuetModePolicy.captureQueueDepth
+    default: return 3
+    }
 }
 
 func makeFormat(_ config: VideoConfiguration) throws -> CMVideoFormatDescription {

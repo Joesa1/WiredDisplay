@@ -37,7 +37,7 @@ mirror mode: primary display ────┘          │
                                     CablePeer / Wire v6
 ```
 
-`ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。Duet 模式优先使用 `queueDepth = 1`、两帧预算、HEVC Main10、实时编码、关闭帧重排和 60 帧关键帧间隔。
+`ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。Duet 模式使用 `queueDepth = 3`、两帧预算、HEVC Main10、实时编码、关闭帧重排和 60 帧关键帧间隔。该深度避免 4096 × 2304 Main10 的单 surface 首帧后停滞；Demo 3 继续独立使用 `queueDepth = 1`。
 
 Duet 的 Main10 硬件编码器创建或配置失败时，发送端仅对当前会话重试一次普通 HEVC：有效 `TransmissionMode` 改为 `lowLatency`，采集改为 8-bit NV12，色彩空间为 sRGB，并按该有效模式发送 `VideoConfiguration`。这不是协议降级，协议版本、配对和接收端 HEVC 能力要求不变；它也不回退到 H.264、RGB 或软件编码。普通 HEVC 仍无法创建或配置时，保留真实 VideoToolbox 状态并失败终止。
 
@@ -98,4 +98,4 @@ Demo 3 reuses exact BGRA8 and native LZ4, but obtains changed rectangles from `S
 
 ## Duet mode
 
-Duet is a separate hardware HEVC Main10 policy, not an implementation or protocol copy from any other product. It uses 10-bit x420 with explicit sRGB/Display P3, SDR transfer and BT.709 matrix metadata; real-time encoding without frame reordering; a bounded high target rate; at most two unacknowledged frames; and `ScreenCaptureKit.queueDepth = 1`. The receiver presents the newest decoded frame available to it, while a full sender budget skips new captures instead of growing an unbounded queue. This reduces full-screen-motion pressure relative to raw RGB but remains a lossy 4:2:0 stream. It does not add independent mouse packets, receiver-to-host input injection, UDP or a new security handshake. The design evidence and deliberate limits are recorded in `docs/research/duet-local-transport-analysis.md` and `docs/plan/analysis/duet-mode-001.md`.
+Duet is a separate hardware HEVC Main10 policy, not an implementation or protocol copy from any other product. It uses 10-bit x420 with explicit sRGB/Display P3, SDR transfer and BT.709 matrix metadata; real-time encoding without frame reordering; a bounded high target rate; at most two unacknowledged frames; and `ScreenCaptureKit.queueDepth = 3`. The receiver presents the newest decoded frame available to it, while a full sender budget skips new captures instead of growing an unbounded queue. This reduces full-screen-motion pressure relative to raw RGB but remains a lossy 4:2:0 stream. It does not add independent mouse packets, receiver-to-host input injection, UDP or a new security handshake. The design evidence and deliberate limits are recorded in `docs/research/duet-local-transport-analysis.md` and `docs/plan/analysis/duet-mode-001.md`.

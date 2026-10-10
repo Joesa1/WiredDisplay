@@ -40,7 +40,8 @@ import Network
         try fallback.validate()
         precondition(fallback.decodedPixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
         precondition(captureQueueDepth(for: fallbackMode!) == 3)
-        precondition(captureQueueDepth(for: .duet) == DuetModePolicy.captureQueueDepth)
+        precondition(captureQueueDepth(for: .duet) == 3)
+        precondition(captureQueueDepth(for: .demo3) == 1)
         precondition(encoderFallbackMode(for: .lowLatency) == nil)
         precondition(encoderFallbackMode(for: .fidelity) == nil)
 
