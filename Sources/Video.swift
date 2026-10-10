@@ -48,6 +48,10 @@ func check(_ status: OSStatus, _ message: String) throws {
     guard status == noErr else { throw WireError.invalid("\(message)（\(status)）") }
 }
 
+func encoderFallbackMode(for mode: TransmissionMode) -> TransmissionMode? {
+    mode == .duet ? .lowLatency : nil
+}
+
 func makeFormat(_ config: VideoConfiguration) throws -> CMVideoFormatDescription {
     try config.validate()
     try DisplayProfile(width: config.width, height: config.height, hiDPI: true, hevc: config.hevc, appVersion: nil).validate()
@@ -417,12 +421,25 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
             onStatus?("虚拟显示器已创建 · ID \(displayID) · 正在准备硬件编码器")
         }
         try queue.sync {
-            budget = FrameBudget(limit: mode.frameLimit)
+            budget = FrameBudget(limit: self.mode.frameLimit)
             previousRaw = nil
             demo3NeedsKeyframe = false
-            if mode.isRGB { active = true } else { try createEncoder(profile) }
+            if self.mode.isRGB {
+                active = true
+            } else {
+                do {
+                    try createEncoder(profile)
+                } catch {
+                    guard let fallback = encoderFallbackMode(for: self.mode) else { throw error }
+                    self.mode = fallback
+                    streamColorSpace = .sRGB
+                    budget = FrameBudget(limit: fallback.frameLimit)
+                    onStatus?("Duet Main10 encoder unavailable; retrying 8-bit HEVC")
+                    try createEncoder(profile)
+                }
+            }
         }
-        onStatus?(mode.isRGB ? "RGB 无损传输已准备 · 正在枚举屏幕" : (mode == .duet ? "Duet 模式已准备 · 10-bit HEVC · 正在等待 ScreenCaptureKit 枚举虚拟屏幕" : (mirror ? "硬件编码器已准备 · 正在枚举主屏幕" : "硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")))
+        onStatus?(self.mode.isRGB ? "RGB 无损传输已准备 · 正在枚举屏幕" : (self.mode == .duet ? "Duet 模式已准备 · 10-bit HEVC · 正在等待 ScreenCaptureKit 枚举虚拟屏幕" : (mirror ? "硬件编码器已准备 · 正在枚举主屏幕" : "硬件编码器已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")))
         var target: SCDisplay?
         for _ in 0..<30 {
             guard !peer.isStopped else { throw WireError.invalid("连接已取消") }
@@ -455,6 +472,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private func createEncoder(_ profile: DisplayProfile) throws {
         let codec = profile.hevc ? kCMVideoCodecType_HEVC : kCMVideoCodecType_H264
         let spec = [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true] as CFDictionary
+        var session: VTCompressionSession?
         try check(VTCompressionSessionCreate(allocator: nil, width: Int32(profile.width), height: Int32(profile.height),
             codecType: codec, encoderSpecification: spec, imageBufferAttributes: nil, compressedDataAllocator: nil,
             outputCallback: { ref, source, status, _, sample in
@@ -467,25 +485,29 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     do { try owner.encoded(sample, sequence: sequence) }
                     catch { owner.onFailure?(error.localizedDescription) }
                 }
-            }, refcon: Unmanaged.passUnretained(self).toOpaque(), compressionSessionOut: &encoder), "无法创建硬件编码器")
-        guard let encoder else { throw WireError.invalid("缺少硬件编码器") }
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue), "无法启用实时编码")
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse), "无法关闭帧重排")
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_ProfileLevel,
+            }, refcon: Unmanaged.passUnretained(self).toOpaque(), compressionSessionOut: &session), "无法创建硬件编码器")
+        guard let session else { throw WireError.invalid("缺少硬件编码器") }
+        var prepared = false
+        defer { if !prepared { VTCompressionSessionInvalidate(session) } }
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue), "无法启用实时编码")
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse), "无法关闭帧重排")
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel,
             value: mode == .fidelity || mode == .duet ? kVTProfileLevel_HEVC_Main10_AutoLevel : (profile.hevc ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_High_AutoLevel)), "此硬件不支持所选编码模式")
         if mode == .fidelity || mode == .duet {
-            try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_OutputBitDepth, value: 10 as CFNumber), "此硬件不支持 10-bit 编码")
+            try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_OutputBitDepth, value: 10 as CFNumber), "此硬件不支持 10-bit 编码")
         }
-        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: 60 as CFNumber)
-        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_MaxFrameDelayCount, value: 0 as CFNumber)
-        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: (mode == .duet ? DuetModePolicy.keyFrameInterval : 120) as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: 60 as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxFrameDelayCount, value: 0 as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval, value: (mode == .duet ? DuetModePolicy.keyFrameInterval : 120) as CFNumber)
         let bitrate = mode.bitrate(width: profile.width, height: profile.height)
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_AverageBitRate, value: bitrate as CFNumber), "Cannot set bitrate")
-        VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality, value: mode == .lowLatency ? kCFBooleanTrue : kCFBooleanFalse)
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_ColorPrimaries, value: streamColorSpace == .displayP3 ? kCVImageBufferColorPrimaries_P3_D65 : kCVImageBufferColorPrimaries_ITU_R_709_2), "Cannot set primaries")
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_TransferFunction, value: kCVImageBufferTransferFunction_sRGB), "Cannot set transfer function")
-        try check(VTSessionSetProperty(encoder, key: kVTCompressionPropertyKey_YCbCrMatrix, value: kCVImageBufferYCbCrMatrix_ITU_R_709_2), "Cannot set YCbCr matrix")
-        try check(VTCompressionSessionPrepareToEncodeFrames(encoder), "硬件编码器准备失败")
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate, value: bitrate as CFNumber), "Cannot set bitrate")
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality, value: mode == .lowLatency ? kCFBooleanTrue : kCFBooleanFalse)
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ColorPrimaries, value: streamColorSpace == .displayP3 ? kCVImageBufferColorPrimaries_P3_D65 : kCVImageBufferColorPrimaries_ITU_R_709_2), "Cannot set primaries")
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_TransferFunction, value: kCVImageBufferTransferFunction_sRGB), "Cannot set transfer function")
+        try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_YCbCrMatrix, value: kCVImageBufferYCbCrMatrix_ITU_R_709_2), "Cannot set YCbCr matrix")
+        try check(VTCompressionSessionPrepareToEncodeFrames(session), "硬件编码器准备失败")
+        encoder = session
+        prepared = true
         active = true
     }
 

@@ -34,6 +34,13 @@ import Network
         precondition(TransmissionMode.duet.frameLimit == 2)
         precondition(TransmissionMode.duet.bitrate(width: 3840, height: 2160) == 149_299_200)
         precondition(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .duet).decodedPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
+        let fallbackMode = encoderFallbackMode(for: .duet)
+        precondition(fallbackMode == .lowLatency)
+        let fallback = VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: fallbackMode!, colorSpace: .sRGB)
+        try fallback.validate()
+        precondition(fallback.decodedPixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+        precondition(encoderFallbackMode(for: .lowLatency) == nil)
+        precondition(encoderFallbackMode(for: .fidelity) == nil)
 
         // Odd row alignment exercises stripping and restoring CoreVideo padding.
         for (width, height) in [(642, 480), (4480, 2520)] {
@@ -97,7 +104,7 @@ import Network
                 rejects { try decoder.decode(wirePacket) }
             }
         }
-        print("PASS: panel geometry, mode validation, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
+        print("PASS: panel geometry, mode validation, Duet 8-bit HEVC fallback decision, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
         try checkMain10()
         if CommandLine.arguments.contains("--capture") {
             guard CGPreflightScreenCaptureAccess() else { throw WireError.invalid("Screen capture permission is required for --capture") }

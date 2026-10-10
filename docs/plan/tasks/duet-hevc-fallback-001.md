@@ -48,3 +48,17 @@ the actual VideoToolbox error and fail the connection.
 4. Run `./build.sh` when the local signing/build toolchain permits it; record a
    concrete failure if it does not.
 
+## Implementation evidence
+
+`ScreenSender` retries only a failed `.duet` Main10 encoder startup as 8-bit
+HEVC `lowLatency` / sRGB, and disposes of a partially configured session before
+the retry. `VideoModesCheck` verifies the fallback decision and its effective
+configuration; verification results are recorded with the implementation
+commit. Independent review and merge still control the `done` transition.
+
+Verification on 2026-10-10:
+
+- `xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h Sources/Cable.swift Sources/DuetMode.swift Sources/Wire.swift Sources/Video.swift Tests/VideoModesCheck.swift -o /private/tmp/thunder-duet-hevc-video-modes-check ... && /private/tmp/thunder-duet-hevc-video-modes-check`: PASS (existing macOS API deprecation warnings only).
+- `xcrun swiftc -swift-version 5 Sources/Cable.swift Sources/DuetMode.swift Sources/Wire.swift Tests/TransportCheck.swift -o /private/tmp/thunder-duet-hevc-transport-check -framework Network -framework SystemConfiguration && /private/tmp/thunder-duet-hevc-transport-check`: PASS.
+- `./build.sh`: PASS; arm64 and x86_64 packages, SHA-256 manifest, and ad-hoc signature verification produced.
+
