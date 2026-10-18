@@ -49,6 +49,15 @@ import Network
         for mode in [TransmissionMode.lossless, .demo1, .demo2, .demo3] {
             precondition(encoderFallbackMode(for: mode) == nil)
         }
+        let pointer = pointerUpdate(location: CGPoint(x: 150, y: 260),
+                                    screenRect: CGRect(x: 100, y: 200, width: 200, height: 400))
+        precondition(pointer.visible && pointer.x == 0.25 && pointer.y == 0.15)
+        let decodedPointer = try Wire.decode(PointerUpdate.self, Wire.json(pointer))
+        try decodedPointer.validate()
+        precondition(!pointerUpdate(location: CGPoint(x: 99, y: 260),
+                                    screenRect: CGRect(x: 100, y: 200, width: 200, height: 400)).visible)
+        rejects { try PointerUpdate(x: .infinity, y: 0, visible: true, hotX: 0, hotY: 0, width: 0, height: 0, png: nil).validate() }
+        rejects { try PointerUpdate(x: 0, y: 0, visible: true, hotX: 0, hotY: 0, width: 257, height: 0, png: nil).validate() }
 
         // Odd row alignment exercises stripping and restoring CoreVideo padding.
         for (width, height) in [(642, 480), (4480, 2520)] {
@@ -112,7 +121,7 @@ import Network
                 rejects { try decoder.decode(wirePacket) }
             }
         }
-        print("PASS: panel geometry, mode validation, lossy H.264 fallback decision, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
+        print("PASS: panel geometry, mode validation, lossy H.264 fallback decision, cursor packet validation, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
         try checkMain10()
         if CommandLine.arguments.contains("--capture") {
             guard CGPreflightScreenCaptureAccess() else { throw WireError.invalid("Screen capture permission is required for --capture") }

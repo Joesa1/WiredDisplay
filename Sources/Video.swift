@@ -63,6 +63,15 @@ func captureQueueDepth(for mode: TransmissionMode) -> Int {
     }
 }
 
+func pointerUpdate(location: CGPoint, screenRect: CGRect) -> PointerUpdate {
+    guard screenRect.width > 0, screenRect.height > 0, screenRect.contains(location) else {
+        return PointerUpdate(x: 0, y: 0, visible: false, hotX: 0, hotY: 0, width: 0, height: 0, png: nil)
+    }
+    return PointerUpdate(x: (location.x - screenRect.minX) / screenRect.width,
+                         y: (location.y - screenRect.minY) / screenRect.height,
+                         visible: true, hotX: 0, hotY: 0, width: 0, height: 0, png: nil)
+}
+
 func makeFormat(_ config: VideoConfiguration) throws -> CMVideoFormatDescription {
     try config.validate()
     try DisplayProfile(width: config.width, height: config.height, hiDPI: true, hevc: config.hevc, appVersion: nil).validate()
@@ -532,6 +541,12 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
               let info = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let status = info.first?[.status] as? Int, status == SCFrameStatus.complete.rawValue,
               let image = CMSampleBufferGetImageBuffer(sampleBuffer), let profile else { return }
+        if configured, let location = CGEvent(source: nil)?.location {
+            let screenRect = (info.first?[.screenRect] as? NSValue)?.rectValue ?? CGDisplayBounds(displayID)
+            if let payload = try? Wire.json(pointerUpdate(location: location, screenRect: screenRect)) {
+                peer.sendPointer(payload)
+            }
+        }
         guard CVPixelBufferGetPixelFormatType(image) == capturePixelFormat,
               CVPixelBufferGetWidth(image) == profile.width, CVPixelBufferGetHeight(image) == profile.height else {
             onFailure?("屏幕采集不支持所选像素格式或尺寸，请选择其他模式")
