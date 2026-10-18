@@ -48,27 +48,27 @@ func check(_ status: OSStatus, _ message: String) throws {
     guard status == noErr else { throw WireError.invalid("\(message)（\(status)）") }
 }
 
-func encoderFallbackMode(for mode: TransmissionMode) -> TransmissionMode? {
-    switch mode {
-    case .lowLatency, .fidelity, .duet: return .lowLatency
-    case .lossless, .demo1, .demo2, .demo3: return nil
-    }
-}
-
 enum EncoderAttempt: Equatable {
     case hardwareHEVC
+    case videoToolboxHEVC
     case hardwareH264
     case videoToolboxH264
 
-    var encodesHEVC: Bool { self == .hardwareHEVC }
-    var requiresHardware: Bool { self != .videoToolboxH264 }
+    var encodesHEVC: Bool { self == .hardwareHEVC || self == .videoToolboxHEVC }
+    var requiresHardware: Bool { self == .hardwareHEVC || self == .hardwareH264 }
 }
 
 func encoderAttempts(for mode: TransmissionMode, receiverSupportsHEVC: Bool) -> [EncoderAttempt] {
     guard !mode.isRGB else { return [] }
-    return receiverSupportsHEVC
-        ? [.hardwareHEVC, .hardwareH264, .videoToolboxH264]
-        : [.hardwareH264, .videoToolboxH264]
+    guard receiverSupportsHEVC else { return [.hardwareH264, .videoToolboxH264] }
+    switch mode {
+    case .fidelity, .duet:
+        return [.hardwareHEVC, .videoToolboxHEVC]
+    case .lowLatency:
+        return [.hardwareHEVC, .videoToolboxHEVC, .hardwareH264, .videoToolboxH264]
+    case .lossless, .demo1, .demo2, .demo3:
+        return []
+    }
 }
 
 func captureQueueDepth(for mode: TransmissionMode) -> Int {
@@ -77,6 +77,18 @@ func captureQueueDepth(for mode: TransmissionMode) -> Int {
     case .duet: return DuetModePolicy.captureQueueDepth
     default: return 3
     }
+}
+
+func screenFrameStatus(_ value: Any?) -> SCFrameStatus? {
+    if let status = value as? SCFrameStatus { return status }
+    if let raw = value as? Int { return SCFrameStatus(rawValue: raw) }
+    guard let raw = (value as? NSNumber)?.intValue else { return nil }
+    return SCFrameStatus(rawValue: raw)
+}
+
+func isUsableScreenFrameStatus(_ value: Any?) -> Bool {
+    guard let status = screenFrameStatus(value) else { return false }
+    return status == .started || status == .complete
 }
 
 func pointerUpdate(location: CGPoint, screenRect: CGRect) -> PointerUpdate {
@@ -418,6 +430,8 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private var mirror = false
     private var audioEnabled = false
     private var sentAudioConfiguration = false
+    private var receivedUsableScreenFrame = false
+    private var firstSampleDiagnosticPending = true
 
     init(peer: CablePeer) { self.peer = peer }
 
@@ -427,7 +441,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         encoderAttempt = profile.hevc ? .hardwareHEVC : .hardwareH264
         streamColorSpace = mode != .lowLatency && profile.wideGamut ? .displayP3 : .sRGB
         guard mode != .fidelity || profile.hevc else { throw WireError.invalid("色彩保真需要 HEVC 硬件解码支持，请选择其他模式") }
-        guard mode != .duet || profile.hevc else { throw WireError.invalid("Duet 模式需要 HEVC Main10 硬件解码支持，请选择其他模式") }
+        guard mode != .duet || profile.hevc else { throw WireError.invalid("色彩低延迟模式需要 HEVC Main10 硬件解码支持，请选择其他模式") }
         self.mirror = mirror
         self.audioEnabled = audio
         onStatus?(mirror ? "正在准备镜像采集 · \(profile.width) × \(profile.height)" : "正在创建虚拟显示器 · \(profile.width) × \(profile.height)")
@@ -464,13 +478,20 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
             budget = FrameBudget(limit: self.mode.frameLimit)
             previousRaw = nil
             demo3NeedsKeyframe = false
+            receivedUsableScreenFrame = false
+            firstSampleDiagnosticPending = true
             if self.mode.isRGB {
                 active = true
             } else {
                 let attempts = encoderAttempts(for: self.mode, receiverSupportsHEVC: profile.hevc)
                 guard !attempts.isEmpty else { throw WireError.invalid("缺少有损编码器方案") }
                 for (index, attempt) in attempts.enumerated() {
-                    if !attempt.encodesHEVC {
+                    if attempt == .videoToolboxHEVC {
+                        self.mode = .lowLatency
+                        encodesHEVC = true
+                        streamColorSpace = .sRGB
+                        budget = FrameBudget(limit: self.mode.frameLimit)
+                    } else if !attempt.encodesHEVC {
                         self.mode = .lowLatency
                         encodesHEVC = false
                         streamColorSpace = .sRGB
@@ -483,6 +504,8 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     } catch {
                         guard index + 1 < attempts.count else { throw error }
                         switch attempts[index + 1] {
+                        case .videoToolboxHEVC:
+                            onStatus?("HEVC Main10 encoder unavailable; retrying 8-bit HEVC VideoToolbox encoder")
                         case .hardwareH264:
                             onStatus?("HEVC encoder unavailable; retrying 8-bit H.264 hardware encoder")
                         case .videoToolboxH264:
@@ -494,8 +517,8 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 }
             }
         }
-        let encoderStatus = encoderAttempt.requiresHardware ? "硬件编码器" : "VideoToolbox H.264 编码器"
-        onStatus?(self.mode.isRGB ? "RGB 无损传输已准备 · 正在枚举屏幕" : (self.mode == .duet ? "Duet 模式已准备 · 10-bit HEVC · 正在等待 ScreenCaptureKit 枚举虚拟屏幕" : (mirror ? "\(encoderStatus)已准备 · 正在枚举主屏幕" : "\(encoderStatus)已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")))
+        let encoderStatus = encoderAttempt.requiresHardware ? "硬件编码器" : "VideoToolbox \(encoderAttempt.encodesHEVC ? "HEVC" : "H.264") 编码器"
+        onStatus?(self.mode.isRGB ? "RGB 无损传输已准备 · 正在枚举屏幕" : (self.mode == .duet ? "色彩低延迟模式已准备 · 10-bit HEVC · 正在等待 ScreenCaptureKit 枚举虚拟屏幕" : (mirror ? "\(encoderStatus)已准备 · 正在枚举主屏幕" : "\(encoderStatus)已准备 · 正在等待 ScreenCaptureKit 枚举虚拟屏幕")))
         var target: SCDisplay?
         for _ in 0..<30 {
             guard !peer.isStopped else { throw WireError.invalid("连接已取消") }
@@ -523,6 +546,10 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         self.stream = stream
         try await stream.startCapture()
         onStatus?("屏幕采集已启动 · 等待首帧")
+        queue.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.active, !self.receivedUsableScreenFrame else { return }
+            self.onFailure?("ScreenCaptureKit 未在 3 秒内生成可传输画面；会话已停止，未把采集故障伪装成已连接")
+        }
     }
 
     private func createEncoder(_ profile: DisplayProfile, attempt: EncoderAttempt) throws {
@@ -543,8 +570,8 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     do { try owner.encoded(sample, sequence: sequence) }
                     catch { owner.onFailure?(error.localizedDescription) }
                 }
-            }, refcon: Unmanaged.passUnretained(self).toOpaque(), compressionSessionOut: &session), attempt.requiresHardware ? "无法创建硬件编码器" : "无法创建 VideoToolbox H.264 编码器")
-        guard let session else { throw WireError.invalid(attempt.requiresHardware ? "缺少硬件编码器" : "缺少 VideoToolbox H.264 编码器") }
+            }, refcon: Unmanaged.passUnretained(self).toOpaque(), compressionSessionOut: &session), attempt.requiresHardware ? "无法创建硬件编码器" : "无法创建 VideoToolbox 编码器")
+        guard let session else { throw WireError.invalid(attempt.requiresHardware ? "缺少硬件编码器" : "缺少 VideoToolbox 编码器") }
         var prepared = false
         defer { if !prepared { VTCompressionSessionInvalidate(session) } }
         try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue), "无法启用实时编码")
@@ -572,16 +599,22 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard active, sampleBuffer.isValid else { return }
         if type == .audio { relayAudio(sampleBuffer); return }
-        guard type == .screen,
-              let info = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
-              let status = info.first?[.status] as? SCFrameStatus, status == .complete,
-              let image = CMSampleBufferGetImageBuffer(sampleBuffer), let profile else { return }
-        if configured, let location = CGEvent(source: nil)?.location {
-            let screenRect = (info.first?[.screenRect] as? NSValue)?.rectValue ?? CGDisplayBounds(displayID)
-            if let payload = try? Wire.json(pointerUpdate(location: location, screenRect: screenRect)) {
-                peer.sendPointer(payload)
-            }
+        guard type == .screen else { return }
+        guard let info = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]] else {
+            reportFirstSampleRejection("缺少 ScreenCaptureKit 附件")
+            return
         }
+        let status = screenFrameStatus(info.first?[.status])
+        guard status == .started || status == .complete else {
+            let raw = status.map { String($0.rawValue) } ?? "未知"
+            reportFirstSampleRejection("状态 \(raw) 未就绪")
+            return
+        }
+        guard let image = CMSampleBufferGetImageBuffer(sampleBuffer), let profile else {
+            reportFirstSampleRejection("缺少像素缓冲或显示配置")
+            return
+        }
+        receivedUsableScreenFrame = true
         guard CVPixelBufferGetPixelFormatType(image) == capturePixelFormat,
               CVPixelBufferGetWidth(image) == profile.width, CVPixelBufferGetHeight(image) == profile.height else {
             onFailure?("屏幕采集不支持所选像素格式或尺寸，请选择其他模式")
@@ -610,6 +643,12 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         let result = VTCompressionSessionEncodeFrame(encoder, imageBuffer: image, presentationTimeStamp: pts,
             duration: .invalid, frameProperties: nil, sourceFrameRefcon: UnsafeMutableRawPointer(bitPattern: UInt(sequence)), infoFlagsOut: nil)
         if result != noErr { onFailure?("编码器跟不上当前分辨率（\(result)）") }
+    }
+
+    private func reportFirstSampleRejection(_ reason: String) {
+        guard firstSampleDiagnosticPending else { return }
+        firstSampleDiagnosticPending = false
+        onStatus?("首个屏幕采样被丢弃 · \(reason)")
     }
 
     private func sendRaw(_ image: CVPixelBuffer, sequence: UInt64, systemDirtyRects: [CGRect]? = nil) throws {
@@ -711,7 +750,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     self.rateSamples.append(mbps)
                     if self.rateSamples.count > 60 { self.rateSamples.removeFirst(self.rateSamples.count - 60) }
                     let stats = StreamStatistics(fps: fps, roundTripMilliseconds: self.lastRoundTrip,
-                                                 megabitsPerSecond: mbps, codec: self.mode.isRGB ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · \(self.mode == .demo1 ? "Demo 1 LZ4 区域" : (self.mode == .demo2 ? "Demo 2 LZ4 整帧" : (self.mode == .demo3 ? "Demo 3 系统变化区域" : "无损")))" : (self.encodesHEVC ? (self.mode == .duet ? "HEVC 10-bit · \(self.streamColorSpace.rawValue) · Duet" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : "HEVC 8-bit · sRGB")) : "H.264 8-bit · sRGB · \(self.encoderAttempt == .hardwareH264 ? "hardware" : "VideoToolbox fallback")"),
+                                                 megabitsPerSecond: mbps, codec: self.mode.isRGB ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · \(self.mode == .demo1 ? "Demo 1 LZ4 区域" : (self.mode == .demo2 ? "Demo 2 LZ4 整帧" : (self.mode == .demo3 ? "Demo 3 系统变化区域" : "无损")))" : (self.encodesHEVC ? (self.mode == .duet ? "HEVC 10-bit · \(self.streamColorSpace.rawValue) · 色彩低延迟" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : "HEVC 8-bit · sRGB")) : "H.264 8-bit · sRGB · \(self.encoderAttempt == .hardwareH264 ? "hardware" : "VideoToolbox fallback")"),
                                                  samples: self.rateSamples)
                     self.onStats?(stats)
                     self.peer.send(.statistics, (try? Wire.json(stats)) ?? Data())

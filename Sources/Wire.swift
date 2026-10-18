@@ -17,7 +17,9 @@ enum PacketKind: UInt8 {
 enum Wire {
     // Both roles use this fixed port; pairing is verified before display streaming.
     static let port: UInt16 = 54321
-    static let protocolVersion = 6
+    static let legacyProtocolVersion = 5
+    static let duetProtocolVersion = 6
+    static let protocolVersion = duetProtocolVersion
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.7.7"
     static let maximumPacket = 64 * 1024 * 1024
     static func header(_ kind: PacketKind, count: Int) -> Data {
@@ -46,8 +48,26 @@ enum Wire {
         guard data.count <= 256 * 1024 else { throw WireError.invalid("控制消息过大") }
         return try JSONDecoder().decode(type, from: data)
     }
+    static func protocolVersion(for mode: TransmissionMode) -> Int {
+        mode == .duet ? duetProtocolVersion : legacyProtocolVersion
+    }
+    // Protocol 6 may carry lowLatency only as the explicit 8-bit HEVC fallback
+    // for a requested Duet session. Normal lowLatency sessions stay on protocol 5.
+    static func allows(_ mode: TransmissionMode, on version: Int) -> Bool {
+        switch version {
+        case legacyProtocolVersion:
+            return mode != .duet
+        case duetProtocolVersion:
+            return mode == .duet || mode == .lowLatency
+        default:
+            return false
+        }
+    }
+    static func supportsProtocol(_ version: Int) -> Bool {
+        version == legacyProtocolVersion || version == duetProtocolVersion
+    }
     static func validateProtocol(_ version: Int) throws {
-        guard version == protocolVersion else {
+        guard supportsProtocol(version) else {
             throw WireError.invalid("协议版本不兼容，请更新两台 Mac")
         }
     }

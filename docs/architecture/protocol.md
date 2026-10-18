@@ -4,7 +4,7 @@
 
 ## 目的与版本
 
-`Wire` 是 Thunder Display 的应用层帧协议。当前开发版 `protocolVersion` 为 `6`，默认 TCP 端口为 `54321`。不同协议版本必须在 `hello` 阶段拒绝。0.7.7 新增 Duet 模式；0.7.6 及更早版本不能互连协议 6。
+`Wire` 是 Thunder Display 的应用层帧协议，默认 TCP 端口为 `54321`。协议 5 是既有六种模式的兼容路径；协议 6 用于请求 Duet。发送端在 `hello` 中按所选模式声明版本，接收端接受 5 或 6，并在 `configuration` 中验证模式与已协商版本相符。协议 6 还允许 `lowLatency`，但仅作为已请求 Duet 的 Main10 失败后、普通 8-bit HEVC 的有效配置；普通低延迟会话仍必须使用协议 5。这样 0.7.7 的普通模式能连协议 5 的 0.7.6，而 Duet 仍要求两端均支持协议 6。
 
 协议 3 为 `DisplayProfile` 增加 `wideGamut`，为 `VideoConfiguration` 增加必需的 `mode`、`colorSpace`。`lowLatency` 使用 sRGB / 8-bit，`fidelity` 使用 HEVC Main10 / 10-bit，`lossless` 使用无视频编码的 BGRA8，后两档按接收屏幕色域选 sRGB 或 Display P3。三档均为 SDR、sRGB 传递函数；YUV 档明确使用 BT.709 矩阵。Display P3 原色与 BT.709 矩阵是不同字段。
 
@@ -69,7 +69,8 @@
 | 条件 | 必须行为 |
 | --- | --- |
 | 首包不是 `hello` | 拒绝候选连接。 |
-| 协议版本不匹配 | 以明确错误结束，不尝试部分兼容。 |
+| 不支持的协议版本 | 以明确错误结束，不尝试部分兼容。 |
+| 已协商协议与传输模式不符 | 在收到 `configuration` 时结束当前会话；协议 5 不允许 Duet，协议 6 只允许 Duet 或其 8-bit HEVC 的 `lowLatency` 降级配置。 |
 | 配对码错误 | 拒绝且不提升为活动 peer。 |
 | 重复/未配置/超 profile 视频 | 结束当前会话，不影响监听器。 |
 | 无效 `cursor` | 忽略该消息，保持视频会话。 |
@@ -95,4 +96,4 @@ Demo 1 compares pixels against the last transmitted frame (not the previous capt
 
 ## Protocol 6: Duet mode
 
-Protocol 6 adds `TransmissionMode.duet`. It requires HEVC and uses Main10/10-bit x420, the existing `VideoConfiguration.colorSpace` and parameter-set framing. It differs from `fidelity` through a separate high-rate encoder policy, a one-second keyframe interval, two unacknowledged frames and a one-surface capture queue; it remains a lossy 4:2:0 video stream. It adds no packet kind, pairing field, input event, UDP path or compatibility bridge. A protocol 5 peer must reject the protocol 6 `hello` before configuration.
+Protocol 6 adds `TransmissionMode.duet`. It requests Main10/10-bit x420, the existing `VideoConfiguration.colorSpace` and parameter-set framing. It differs from `fidelity` through a separate high-rate encoder policy, a one-second keyframe interval, two unacknowledged frames and a three-surface capture queue; it remains a lossy 4:2:0 video stream. If Main10 cannot be created, protocol 6 may carry an effective `lowLatency` configuration with ordinary 8-bit HEVC; it must never carry H.264 as a disguised Duet session. It adds no packet kind, pairing field, input event, UDP path or compatibility bridge. A protocol 5 peer rejects a protocol 6 `hello`; a protocol 6 receiver accepts protocol 5 for legacy modes and protocol 6 for Duet or its bounded HEVC fallback.

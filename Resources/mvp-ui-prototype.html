@@ -413,6 +413,7 @@
         <h1 id="toolbar-title">iMac 5K</h1>
         <div class="toolbar-actions">
           <button class="icon-button" id="refresh" aria-label="刷新设备" title="刷新设备"><i data-lucide="rotate-cw"></i></button>
+          <button class="button-secondary" id="toolbar-copy-log" title="复制最近一次连接日志"><i data-lucide="copy"></i><span>拷贝连接日志</span></button>
           <button class="button-primary" id="toolbar-connect"><i data-lucide="link"></i><span id="connect-label">连接</span></button>
         </div>
       </div>
@@ -454,7 +455,7 @@
             <div class="host-config" id="host-config">
               <div class="route-copy"><i data-lucide="monitor-up"></i><div><span>主机输出</span><strong id="host-target">将桌面扩展到 iMac 5K</strong></div></div>
               <div class="host-options">
-                <label>传输模式 <select id="transmission-mode" aria-describedby="transmission-hint"><option value="lowLatency">低延迟 SDR · 有损</option><option value="fidelity">色彩保真 · 10-bit HEVC 有损</option><option value="lossless">无损 · RGB 原始像素</option><option value="demo1">Demo 1 · 无损区域</option><option value="demo2">Demo 2 · 无损整帧</option><option value="demo3">Demo 3 · 系统变化区域</option><option value="duet">Duet 模式 · 10-bit HEVC 色彩优先</option></select></label>
+                <label>传输模式 <select id="transmission-mode" aria-describedby="transmission-hint"><option value="lowLatency">低延迟 SDR · 有损</option><option value="fidelity">色彩保真 · 10-bit HEVC 有损</option><option value="lossless">无损 · RGB 原始像素</option><option value="duet">色彩低延迟 · 10-bit HEVC 有损</option></select></label>
                 <label>分辨率 <select id="stream-resolution"><option value="native">面板原生</option><option value="compatible">4K 兼容</option></select></label>
                 <div class="segmented-control mode-control" role="group" aria-label="显示模式">
                   <button class="segment active" data-output-mode="extend" aria-pressed="true">扩展</button>
@@ -673,7 +674,7 @@
         demo2: '实验：最多两帧在途，LZ4 无损压缩整帧；保留原始 RGB 和随画面光标。与 Demo 1 仅区域更新不同。',
         demo3: '实验：仅一帧在途，使用系统报告的变化区域和 LZ4 无损压缩；缺少有效变化区域时发送完整 RGB 帧。保留原始 RGB 和随画面光标。',
         lossless: '采集后的 8-bit RGB 像素原样传输；带宽与内存负载高，实际帧率受链路限制。不能消除面板自身色差。',
-        duet: 'Duet 模式：硬件 HEVC Main10、sRGB 或 Display P3 色彩元数据、两帧有界在途。接收端展示已解码帧中的最新一帧，预算满时跳过新采集帧，不无限排队。高色彩还原但仍是有损编码，不是 RGB 字节级无损。'
+        duet: '10-bit HEVC，sRGB 或 Display P3 色彩元数据、两帧有界在途和更短关键帧间隔。相较色彩保真，优先较低的在途延迟；仍是有损编码，不是 RGB 字节级无损。'
       }[targetTransmissionMode()];
       $('#receiver-config').hidden = isHost;
       const target = selected();
@@ -754,6 +755,13 @@
         : listening ? '断开监听'
         : (isHost ? `${outputMode === 'extend' ? '扩展到' : '镜像到'} ${device.name}` : `作为显示器连接`);
       $('#toolbar-title').textContent = `${isHost ? '主机' : '显示器'} · ${device.name}`;
+      const targetButtons = ['toolbar-connect', 'version-refresh', 'toolbar-test', 'run-test'];
+      targetButtons.forEach((id) => {
+        const button = $(`#${id}`);
+        if (!button) return;
+        button.dataset.address = isLocal ? '' : (device.ip || '');
+        button.dataset.code = isLocal ? '' : (device.pairingCode || '');
+      });
       $('#toolbar-connect').disabled = isHost && (isLocal || !device.ip || !device.pairingCode);
       $('#toolbar-connect').title = isLocal && isHost ? '请在左侧选择显示器' : compatibility === 'incompatible' ? '上次握手版本不同；连接时会重新验证' : '';
       $('#device-actions').hidden = isLocal;
@@ -897,7 +905,7 @@
     const defaultSettings = { autoReconnect: true, menuBarStatus: true, preflight: true, keepDiagnostics: true };
     function targetTransmissionMode() {
       const value = selected().transmissionMode;
-      return ['lowLatency', 'fidelity', 'lossless', 'demo1', 'demo2', 'demo3', 'duet'].includes(value) ? value : 'lowLatency';
+      return ['lowLatency', 'fidelity', 'lossless', 'duet'].includes(value) ? value : 'lowLatency';
     }
     ['transmission-mode', 'stream-resolution'].forEach((id) => {
       document.getElementById(id).addEventListener('change', (event) => {

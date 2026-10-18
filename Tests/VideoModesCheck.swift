@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import ScreenCaptureKit
 import VideoToolbox
 import Network
 
@@ -34,27 +35,32 @@ import Network
         precondition(TransmissionMode.duet.frameLimit == 2)
         precondition(TransmissionMode.duet.bitrate(width: 3840, height: 2160) == 149_299_200)
         precondition(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .duet).decodedPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
-        for requestedMode in [TransmissionMode.lowLatency, .fidelity, .duet] {
-            precondition(encoderAttempts(for: requestedMode, receiverSupportsHEVC: true) == [.hardwareHEVC, .hardwareH264, .videoToolboxH264])
-            let fallbackMode = encoderFallbackMode(for: requestedMode)
-            precondition(fallbackMode == .lowLatency)
-            let fallback = VideoConfiguration(width: 640, height: 480, hevc: false,
-                parameterSets: [Data([0x67]), Data([0x68])], mode: fallbackMode!, colorSpace: .sRGB)
+        precondition(encoderAttempts(for: .lowLatency, receiverSupportsHEVC: true) == [.hardwareHEVC, .videoToolboxHEVC, .hardwareH264, .videoToolboxH264])
+        for requestedMode in [TransmissionMode.fidelity, .duet] {
+            precondition(encoderAttempts(for: requestedMode, receiverSupportsHEVC: true) == [.hardwareHEVC, .videoToolboxHEVC])
+            let fallback = VideoConfiguration(width: 640, height: 480, hevc: true,
+                parameterSets: [Data([0x40]), Data([0x42]), Data([0x44])], mode: .lowLatency, colorSpace: .sRGB)
             try fallback.validate()
-            precondition(fallback.parameterSets.count == 2)
+            precondition(fallback.parameterSets.count == 3)
             precondition(fallback.decodedPixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
-            precondition(captureQueueDepth(for: fallbackMode!) == 3)
+            precondition(captureQueueDepth(for: .lowLatency) == 3)
         }
         precondition(encoderAttempts(for: .lowLatency, receiverSupportsHEVC: false) == [.hardwareH264, .videoToolboxH264])
         precondition(encoderAttempts(for: .lossless, receiverSupportsHEVC: true).isEmpty)
         precondition(EncoderAttempt.hardwareHEVC.encodesHEVC && EncoderAttempt.hardwareHEVC.requiresHardware)
+        precondition(EncoderAttempt.videoToolboxHEVC.encodesHEVC && !EncoderAttempt.videoToolboxHEVC.requiresHardware)
         precondition(!EncoderAttempt.hardwareH264.encodesHEVC && EncoderAttempt.hardwareH264.requiresHardware)
         precondition(!EncoderAttempt.videoToolboxH264.encodesHEVC && !EncoderAttempt.videoToolboxH264.requiresHardware)
         precondition(captureQueueDepth(for: .duet) == 3)
         precondition(captureQueueDepth(for: .demo3) == 1)
-        for mode in [TransmissionMode.lossless, .demo1, .demo2, .demo3] {
-            precondition(encoderFallbackMode(for: mode) == nil)
-        }
+        precondition(isUsableScreenFrameStatus(SCFrameStatus.started))
+        precondition(isUsableScreenFrameStatus(SCFrameStatus.complete))
+        precondition(isUsableScreenFrameStatus(SCFrameStatus.started.rawValue))
+        precondition(isUsableScreenFrameStatus(SCFrameStatus.complete.rawValue))
+        precondition(isUsableScreenFrameStatus(NSNumber(value: SCFrameStatus.started.rawValue)))
+        precondition(isUsableScreenFrameStatus(NSNumber(value: SCFrameStatus.complete.rawValue)))
+        precondition(!isUsableScreenFrameStatus(NSNumber(value: SCFrameStatus.idle.rawValue)))
+        precondition(!isUsableScreenFrameStatus(nil))
         let pointer = pointerUpdate(location: CGPoint(x: 150, y: 260),
                                     screenRect: CGRect(x: 100, y: 200, width: 200, height: 400))
         precondition(pointer.visible && pointer.x == 0.25 && pointer.y == 0.15)

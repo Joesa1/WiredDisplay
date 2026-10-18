@@ -8,6 +8,7 @@ private final class ReceiveSession {
     let decoder = HardwareDecoder()
     let audio = AudioRenderer()
     var authenticated = false
+    var protocolVersion: Int?
     var configured = false
     var lastSequence: UInt64 = 0
     var lastSeen = DispatchTime.now().uptimeNanoseconds
@@ -387,29 +388,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
           const output = () => document.querySelector('[data-output-mode].active')?.dataset.outputMode || 'extend';
           const audio = () => document.getElementById('audio-relay')?.classList.contains('on') || false;
           const preventSleep = () => document.getElementById('prevent-sleep')?.classList.contains('on') || false;
-          const selectedDevice = () => {
-            try {
-              const all = JSON.parse(localStorage.getItem('tb-mvp-devices') || '[]');
-              const id = localStorage.getItem('tb-mvp-selected');
-              return all.find((device) => device.id === id) || all[0] || {};
-            } catch (_) { return {}; }
-          };
+          const target = (button) => ({ address: button.dataset.address || '', code: button.dataset.code || '' });
           document.addEventListener('click', (event) => {
             const button = event.target.closest('button');
             if (!button) return;
             if (button.id === 'toolbar-connect') {
               event.preventDefault(); event.stopImmediatePropagation();
-              const device = selectedDevice();
-              post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), address: device.ip || '', code: device.pairingCode || '', transmissionMode: document.getElementById('transmission-mode').value, resolution: document.getElementById('stream-resolution').value });
+              post('session', { role: role(), output: output(), audio: audio(), preventSleep: preventSleep(), ...target(button), transmissionMode: document.getElementById('transmission-mode').value, resolution: document.getElementById('stream-resolution').value });
             } else if (button.id === 'version-refresh') {
               event.preventDefault(); event.stopImmediatePropagation();
-              const device = selectedDevice();
-              post('test', { address: device.ip || '', code: device.pairingCode || '' });
+              post('test', target(button));
             } else if (button.id === 'toolbar-test' || button.id === 'run-test') {
-              const device = selectedDevice();
-              post('test', { address: device.ip || '', code: device.pairingCode || '' });
+              post('test', target(button));
             } else if (button.id === 'refresh') {
               event.preventDefault(); event.stopImmediatePropagation(); post('refresh');
+            } else if (button.id === 'toolbar-copy-log') {
+              event.preventDefault(); event.stopImmediatePropagation(); post('copyDiagnostics');
             } else if (button.id === 'modal-save') {
               const device = {
                 address: document.getElementById('device-ip')?.value || '',
@@ -589,6 +583,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             _ = ThunderboltInspector.refresh(cable: CableAddress.current())
             tick()
             prototypeToast(CableAddress.current() == nil ? "未发现雷雳网桥" : "已读取雷雳网桥和系统链路状态")
+        case "copyDiagnostics":
+            copyDiagnostics()
+            prototypeToast(diagnosticLines.isEmpty ? "暂无连接日志" : "连接日志已复制")
         case "role":
             let display = body["role"] as? String == "display"
             if peer != nil || listener != nil || connecting { endSession("正在切换本机角色…") }
@@ -995,6 +992,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                     try Wire.validateProtocol(hello.version)
                     guard hello.code == code else { throw WireError.invalid("配对码不正确") }
                     try profile.validate()
+                    session.protocolVersion = hello.version
                     DispatchQueue.main.async {
                         self.prototypeUpsertDevice(hello.identity, address: hello.address,
                                                    code: hello.receiverCode, version: hello.appVersion)
@@ -1037,6 +1035,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             case .configuration:
                 guard !session.configured else { throw WireError.invalid("重复视频配置") }
                 let config = try Wire.decode(VideoConfiguration.self, data)
+                guard let protocolVersion = session.protocolVersion,
+                      Wire.allows(config.mode, on: protocolVersion) else {
+                    throw WireError.invalid("传输模式与已协商协议不符")
+                }
                 guard config.width <= profile.width, config.height <= profile.height else { throw WireError.invalid("视频超过接收屏幕尺寸") }
                 do { try session.decoder.configure(config) }
                 catch {
@@ -1051,14 +1053,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 session.lastSequence = sequence
                 try session.decoder.decode(data)
             case .cursor:
-                // Cursor delivery is best-effort. It must never tear down video.
-                guard session.configured,
-                      let pointer = try? Wire.decode(PointerUpdate.self, data),
-                      (try? pointer.validate()) != nil else { return }
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.sessionID == generation, self.peer === accepted else { return }
-                    self.surface.setPointer(pointer)
-                }
+                // ScreenCaptureKit already carries the native cursor, including hover shapes.
+                // Ignore legacy software-cursor packets to avoid a second cursor overlay.
+                break
             case .statistics:
                 let stats = try Wire.decode(StreamStatistics.self, data)
                 DispatchQueue.main.async { [weak self] in self?.prototypeMetrics(stats) }
@@ -1255,7 +1252,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                         }
                     }
                     peer.onReady = { [weak peer] in
-                        let hello = Hello(version: Wire.protocolVersion, code: code, probe: probe,
+                        let protocolVersion = probe ? Wire.legacyProtocolVersion : Wire.protocolVersion(for: transmissionMode)
+                        let hello = Hello(version: protocolVersion, code: code, probe: probe,
                                           identity: self.localIdentity, address: cable.ip,
                                           receiverCode: self.localPairingCode,
                                           preventDisplaySleep: self.remoteSleepRequested)
@@ -1264,7 +1262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                             guard self.sessionID == generation else { return }
                             self.transportReady = true
                             self.lastSendPacket = DispatchTime.now().uptimeNanoseconds
-                            self.record("TCP 已连接 · 正在验证配对并交换屏幕参数")
+                            self.record("TCP 已连接 · 协议 \(protocolVersion) · 正在验证配对并交换屏幕参数")
                         }
                     }
                     peer.start()

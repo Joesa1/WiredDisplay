@@ -39,7 +39,9 @@ mirror mode: primary display ────┘          │
 
 `ScreenSender.start(profile:mirror:audio:)` 使用接收端 `DisplayProfile` 建立采集路径。扩展模式创建虚拟显示器；镜像模式选择主屏幕。它持有压缩会话、采集 stream、帧预算和可选音频输出，`stop()` 必须释放这些资源。Duet 模式使用 `queueDepth = 3`、两帧预算、HEVC Main10、实时编码、关闭帧重排和 60 帧关键帧间隔。该深度避免 4096 × 2304 Main10 的单 surface 首帧后停滞；Demo 3 继续独立使用 `queueDepth = 1`。
 
-Duet 的 Main10 硬件编码器创建或配置失败时，发送端仅对当前会话重试一次普通 HEVC：有效 `TransmissionMode` 改为 `lowLatency`，采集改为 8-bit NV12，色彩空间为 sRGB，并按该有效模式发送 `VideoConfiguration`。这不是协议降级，协议版本、配对和接收端 HEVC 能力要求不变；它也不回退到 H.264、RGB 或软件编码。普通 HEVC 仍无法创建或配置时，保留真实 VideoToolbox 状态并失败终止。
+屏幕采样仅接受 `SCFrameStatus.started` 或 `.complete`。`idle` 表示显示器未产生新画面，不能当作首帧。ScreenCaptureKit 附件在不同 Swift 桥接路径中可能为 `SCFrameStatus` 或 `NSNumber`，两者必须解析为同一状态；不能将任一表示静默当作无帧。启动后三秒没有可传输 screen frame 时发送端必须终止会话并报告采集故障；首个被拒样本必须记录拒绝原因。
+
+接收端 HEVC 解码能力不等同于发送端 HEVC 硬件编码能力。请求 HEVC Main10 的色彩保真或 Duet 模式创建/配置硬件编码器失败时，发送端仅在当前会话重试一次普通 8-bit HEVC VideoToolbox 编码：有效 `TransmissionMode` 改为 `lowLatency`，采集改为 8-bit NV12，色彩空间为 sRGB，并继续以 `hevc: true` 和三个参数集发送 `VideoConfiguration`。普通 HEVC 仍不可用时直接报告真实错误，不能伪装成 H.264 Duet。低延迟模式可在 HEVC 均不可用时继续重试 H.264 High 硬件、再重试非硬件限定 H.264。协议版本、配对、原始 RGB 与 Demo 路径不变。
 
 ## 显示器管线
 
@@ -78,8 +80,9 @@ audioConfiguration + audio
 | --- | --- |
 | 无屏幕录制权限 | `ScreenSender.start` 失败，`AppDelegate` 回到可恢复 UI。 |
 | 虚拟显示器创建失败 | 不启动采集或媒体发送。 |
-| Duet Main10 编码器创建/配置失败 | 对当前会话重试一次普通 HEVC；其 `VideoConfiguration` 必须是 8-bit `lowLatency` / sRGB。 |
-| 普通 HEVC 或其他编码器/解码器配置失败 | 结束本次 peer，会话资源释放并保留真实状态码。 |
+| 任一有损 HEVC 编码器创建/配置失败 | 对当前会话重试一次 H.264 High；其 `VideoConfiguration` 必须是 8-bit `lowLatency` / sRGB / `hevc: false`。 |
+| 硬件 H.264 编码器创建/配置失败 | 对当前会话重试一次非硬件限定 H.264；统计必须标识实际编码器。 |
+| 最终 H.264 或其他编码器/解码器配置失败 | 结束本次 peer，会话资源释放并保留真实状态码。 |
 | 视频窗口关闭 | 接收端表示停止显示，必须恢复鼠标、渲染和息屏状态。 |
 | socket 关闭 | 接收端停止 decoder/audio/surface，但 listener 保持运行。 |
 | 系统睡眠 | 使当前发送/接收会话失效；唤醒按应用生命周期规则恢复。 |

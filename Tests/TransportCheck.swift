@@ -59,11 +59,21 @@ import Darwin
                 }
             }
         }
-        let payload = try Wire.json(Hello(version: Wire.protocolVersion, code: "123456", probe: true))
-        try Wire.validateProtocol(Wire.protocolVersion)
+        let payload = try Wire.json(Hello(version: Wire.legacyProtocolVersion, code: "123456", probe: true))
+        try Wire.validateProtocol(Wire.legacyProtocolVersion)
+        try Wire.validateProtocol(Wire.duetProtocolVersion)
         rejects { try Wire.validateProtocol(4) }
+        precondition(Wire.protocolVersion(for: .lowLatency) == Wire.legacyProtocolVersion)
+        precondition(Wire.protocolVersion(for: .fidelity) == Wire.legacyProtocolVersion)
+        precondition(Wire.protocolVersion(for: .lossless) == Wire.legacyProtocolVersion)
+        precondition(Wire.protocolVersion(for: .duet) == Wire.duetProtocolVersion)
+        precondition(Wire.allows(.lowLatency, on: Wire.legacyProtocolVersion))
+        precondition(!Wire.allows(.duet, on: Wire.legacyProtocolVersion))
+        precondition(Wire.allows(.duet, on: Wire.duetProtocolVersion))
+        precondition(Wire.allows(.lowLatency, on: Wire.duetProtocolVersion))
+        precondition(!Wire.allows(.fidelity, on: Wire.duetProtocolVersion))
         let identity = PeerIdentity(id: "check-mac", name: "Check Mac", model: "MacBookPro", systemVersion: "macOS test")
-        let paired = Hello(version: Wire.protocolVersion, code: "123456", identity: identity,
+        let paired = Hello(version: Wire.duetProtocolVersion, code: "123456", identity: identity,
                            address: "10.10.10.2", receiverCode: "654321")
         let decodedPair = try Wire.decode(Hello.self, Wire.json(paired))
         precondition(decodedPair.identity?.id == "check-mac" && decodedPair.receiverCode == "654321")

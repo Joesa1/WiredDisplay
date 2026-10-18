@@ -14,7 +14,7 @@
 | `ThunderboltInspector` | 系统网络与接口信息 | 返回雷雳网桥地址和系统报告。 |
 | `CablePeer` | 对端 IP、`CableAddress` | 一个可停止的 `NWConnection`，带协议帧收发与状态回调。 |
 | `CableListener` | 端口、`CableAddress` | 在 `Wire.port` 监听候选 peer，并发布 Bonjour 服务。 |
-| `CableDiscovery` | Bonjour 查询 | 仅返回 `protocol` 字段与本地版本匹配的发现结果。 |
+| `CableDiscovery` | Bonjour 查询 | 返回协议 5 或 6 的发现结果；连接时由 `hello` 决定实际版本。 |
 
 ## 建连与监听
 
@@ -47,7 +47,8 @@ Wire 头部定义在 `Wire.header`：4 字节大端 `length`，随后 1 字节 `
 
 | 字段 | 值 | 用途 |
 | --- | --- | --- |
-| `protocol` | `Wire.protocolVersion` | 过滤不兼容应用。 |
+| `protocol` | `5` | 保持旧发现端可见。 |
+| `protocols` | `5,6` | 新发现端可见的支持版本集合。 |
 | `version` | 应用版本 | 供发现结果展示，不单独决定协议兼容性。 |
 | `ip` | 当前雷雳网桥地址 | 供发现结果填充候选端点。 |
 | `interface` | 当前 `bridgeN` 名称 | 诊断当前发现记录来自哪个网桥。 |

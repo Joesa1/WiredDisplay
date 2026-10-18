@@ -292,7 +292,8 @@ final class CableListener {
             self.onAccept?(CablePeer(connection: connection, cable: CableAddress.current() ?? self.cable))
         }
         listener.service = NWListener.Service(name: Host.current().localizedName ?? "WiredDisplay",
-            type: "_wireddisplay._tcp", txtRecord: NWTXTRecord(["protocol": String(Wire.protocolVersion),
+            type: "_wireddisplay._tcp", txtRecord: NWTXTRecord(["protocol": String(Wire.legacyProtocolVersion),
+                "protocols": "\(Wire.legacyProtocolVersion),\(Wire.duetProtocolVersion)",
                 "version": Wire.appVersion, "ip": cable.ip, "interface": cable.name]))
         listener.start(queue: queue)
     }
@@ -310,8 +311,9 @@ final class CableDiscovery {
                                 using: NWParameters.tcp)
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             let addresses = results.compactMap { result -> String? in
-                guard case .bonjour(let record) = result.metadata,
-                      record["protocol"] == String(Wire.protocolVersion) else { return nil }
+                guard case .bonjour(let record) = result.metadata else { return nil }
+                let versions = (record["protocols"] ?? record["protocol"] ?? "").split(separator: ",")
+                guard versions.contains(where: { Int($0).map(Wire.supportsProtocol) == true }) else { return nil }
                 return record["ip"]
             }
             DispatchQueue.main.async { self?.onReceivers?(Array(Set(addresses)).sorted()) }
