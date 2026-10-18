@@ -546,7 +546,8 @@
     }));
     let senderVersion = '待读取';
     let senderProtocol = '待读取';
-    let connectedId = null;
+    var connectedId = null;
+    var startingId = null;
     let selectedId = devices.some((device) => device.id === localStorage.getItem('tb-mvp-selected'))
       ? localStorage.getItem('tb-mvp-selected') : null;
     let initialDeviceResolved = false;
@@ -606,7 +607,8 @@
     }
     function visibleDevice() { return showingLocal ? localDevice() : selected(); }
     function iconFor(device) { return `<i data-lucide="${presentationFor(device).icon}"></i>`; }
-    function statusText(device) { return device.id === connectedId ? '正在连接' : device.state === 'online' ? '可连接' : '等待设备插入'; }
+    function activeSessionId() { return connectedId || startingId; }
+    function statusText(device) { return device.id === connectedId ? '正在扩展' : device.id === startingId ? '正在启动画面' : device.state === 'online' ? '可连接' : '等待设备插入'; }
     function compatibilityFor(device) {
       if (!device.protocolVersion) return 'unknown';
       return device.protocolVersion === senderProtocol ? 'compatible' : 'incompatible';
@@ -626,7 +628,7 @@
       localStorage.setItem('tb-mvp-data-version', '4');
     }
     function resolveInitialDevice() {
-      if (initialDeviceResolved || connectedId || localRole !== 'host') return;
+      if (initialDeviceResolved || activeSessionId() || localRole !== 'host') return;
       const compatible = devices.find((device) => String(device.protocolVersion || '') === String(senderProtocol));
       if (!compatible) return;
       initialDeviceResolved = true;
@@ -640,7 +642,8 @@
     function renderDevices() {
       const side = $('#saved-devices');
       side.innerHTML = devices.length ? devices.map((device) => {
-        const occupied = !!connectedId && device.id !== connectedId;
+        const sessionId = activeSessionId();
+        const occupied = !!sessionId && device.id !== sessionId;
         return `<button class="device-side-item ${!showingLocal && device.id === selectedId ? 'active' : ''}" data-device="${device.id}" ${occupied ? 'disabled title="当前显示会话进行中"' : ''}>${iconFor(device)}<span class="device-label"><span class="device-name">${device.name}</span></span><i class="sidebar-status ${device.id === connectedId ? 'online' : 'away'}"></i></button>`;
       }).join('') : '<div class="empty-state">尚未添加设备</div>';
       document.querySelectorAll('[data-device]').forEach((element) => element.addEventListener('click', () => selectDevice(element.dataset.device, true)));
@@ -661,8 +664,8 @@
       $('#transmission-hint').hidden = !isHost || showingLocal || !selected().id;
       $('#transmission-mode').value = targetTransmissionMode();
       $('#stream-resolution').value = selected().streamResolution || 'native';
-      $('#transmission-mode').disabled = Boolean(connectedId) || Boolean(window.__transmissionBusy);
-      $('#stream-resolution').disabled = Boolean(connectedId) || Boolean(window.__transmissionBusy);
+      $('#transmission-mode').disabled = Boolean(activeSessionId()) || Boolean(window.__transmissionBusy);
+      $('#stream-resolution').disabled = Boolean(activeSessionId()) || Boolean(window.__transmissionBusy);
       $('#transmission-hint').textContent = {
         lowLatency: '8-bit SDR，优先响应速度；分辨率根据对端面板计算。',
         fidelity: '10-bit SDR，优先渐变和色彩；仍有损，需要两端硬件支持，不支持时提示换档。',
@@ -702,7 +705,7 @@
       $('#metric-fps').textContent = hasStats ? Number(stats.fps || 0).toFixed(0) : '—';
       $('#metric-latency').textContent = hasStats ? Number(stats.roundTripMilliseconds || 0).toFixed(0) : '—';
       $('#metric-codec').textContent = hasStats ? (stats.codec || '—') : '—';
-      $('#graph-value').textContent = hasStats ? `${Number(stats.megabitsPerSecond || 0).toFixed(1)} Mbit/s` : (connectedId ? '已连接，等待统计' : '等待连接');
+      $('#graph-value').textContent = hasStats ? `${Number(stats.megabitsPerSecond || 0).toFixed(1)} Mbit/s` : (connectedId ? '已连接，等待统计' : startingId ? '正在启动，等待首帧' : '等待连接');
       const values = hasStats ? (stats.samples || []).slice(-60) : [];
       const max = Math.max(1, ...values);
       const path = values.map((value, index) => `${index ? 'L' : 'M'}${(index / Math.max(1, values.length - 1)) * 600} ${29 - value / max * 25}`).join(' ') || 'M0 28 L600 28';
@@ -719,6 +722,7 @@
       const presentation = presentationFor(device);
       const isLocal = showingLocal;
       const isLive = !isLocal && !!device.id && device.id === connectedId;
+      const isStarting = !isLocal && !!device.id && device.id === startingId;
       const compatibility = compatibilityFor(device);
       const isHost = localRole === 'host';
       const listening = window.__thunderListening === true && !isHost;
@@ -741,10 +745,12 @@
       $('#hero-device-avatar').innerHTML = `<i data-lucide="${presentation.icon === 'laptop' ? 'laptop' : 'monitor-up'}"></i>`;
       $('#connection-pill').innerHTML = isLive
         ? `<i></i><span>${isHost ? '正在扩展' : '正在接收'}</span>`
+        : isStarting ? '<i style="background: var(--orange)"></i><span>正在启动画面</span>'
         : listening ? '<i style="background: var(--orange)"></i><span>监听中</span>'
         : '<i style="background: var(--secondary)"></i><span>未连接</span>';
       $('#connect-label').textContent = isLive
         ? (isHost ? '停止扩展' : '停止接收')
+        : isStarting ? '停止启动'
         : listening ? '断开监听'
         : (isHost ? `${outputMode === 'extend' ? '扩展到' : '镜像到'} ${device.name}` : `作为显示器连接`);
       $('#toolbar-title').textContent = `${isHost ? '主机' : '显示器'} · ${device.name}`;
@@ -757,6 +763,8 @@
         ? (isHost
           ? `<b>${outputMode === 'extend' ? '正在扩展到' : '正在镜像到'} ${device.name}</b><br>实际参数将在首帧后显示 · 音频中继${audioRelay ? '开启' : '关闭'}`
           : `<b>正在接收 ${device.name} 的画面</b><br>作为显示器 · 息屏设置由主机指定`)
+        : isStarting
+          ? `<b>正在启动到 ${device.name}</b><br>已完成配对，等待接收端确认首帧`
         : (listening
           ? `<b>监听中 · TCP 54321</b><br>等待主机输入地址和配对码`
           : isHost
@@ -789,7 +797,7 @@
         : '';
     }
     function selectDevice(id, announce) {
-      if (connectedId && id !== connectedId) return;
+      if (activeSessionId() && id !== activeSessionId()) return;
       initialDeviceResolved = true;
       showingLocal = false; selectedId = id; persist(); showPage('current-device'); renderDevices();
       if (announce) showToast(`已选择 ${selected().name}`);
@@ -798,11 +806,11 @@
       const device = selected();
       if (showingLocal && localRole === 'host') { showToast('请先在左侧选择显示器'); return; }
       if (!device.id) { showToast('请先添加对端设备'); return; }
-      showToast(connectedId === device.id ? '正在停止显示会话' : '正在发起真实雷雳连接');
+      showToast(activeSessionId() === device.id ? '正在停止显示会话' : '正在发起真实雷雳连接');
     }
     function requestRole(role) {
       if (role === localRole) return;
-      if (!connectedId) { applyRole(role); return; }
+      if (!activeSessionId()) { applyRole(role); return; }
       pendingRole = role;
       $('#role-copy').textContent = `切换为${role === 'host' ? '主机' : '显示器'}会停止当前与 ${selected().name} 的显示会话。`;
       $('#role-modal').classList.add('show');
@@ -810,6 +818,7 @@
     function applyRole(role) {
       localRole = role;
       connectedId = null;
+      startingId = null;
       pendingRole = null;
       persist(); renderDevices();
       showToast(`本机现作为${role === 'host' ? '主机' : '显示器'}，当前会话已停止`);
@@ -838,7 +847,8 @@
       const device = selected();
       devices = devices.filter((item) => item.id !== device.id);
       if (connectedId === device.id) connectedId = null;
-      selectedId = connectedId || devices[0]?.id || null;
+      if (startingId === device.id) startingId = null;
+      selectedId = activeSessionId() || devices[0]?.id || null;
       persist(); closeModal('forget-modal'); renderDevices(); showToast(`已忘记 ${device.name} 及其本地配对凭据`);
     }
     function runTest() {
@@ -891,7 +901,7 @@
     }
     ['transmission-mode', 'stream-resolution'].forEach((id) => {
       document.getElementById(id).addEventListener('change', (event) => {
-        if (showingLocal || localRole !== 'host' || connectedId || window.__transmissionBusy) { renderDetail(); return; }
+        if (showingLocal || localRole !== 'host' || activeSessionId() || window.__transmissionBusy) { renderDetail(); return; }
         const device = selected();
         if (!device.id) return;
         device[id === 'transmission-mode' ? 'transmissionMode' : 'streamResolution'] = event.target.value;

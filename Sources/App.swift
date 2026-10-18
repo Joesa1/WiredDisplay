@@ -456,10 +456,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               window.__thunderListening = active;
               renderDetail();
             },
-            connection(live, roleName, message, peerId) {
-              const device = peerId ? devices.find((item) => item.peerId === peerId) : devices.find((item) => item.id === connectedId) || selected();
-              if (live && device?.id) { delete metricsByDevice[device.id]; connectedId = device.id; selectedId = device.id; showingLocal = false; device.state = 'online'; device.last = '刚刚'; }
-              else if (connectedId) { const active = devices.find((item) => item.id === connectedId); if (active) active.state = 'away'; connectedId = null; }
+            connection(live, starting, roleName, message, peerId) {
+              const device = peerId ? devices.find((item) => item.peerId === peerId) : devices.find((item) => item.id === connectedId || item.id === startingId) || selected();
+              if (live && device?.id) { delete metricsByDevice[device.id]; connectedId = device.id; startingId = null; selectedId = device.id; showingLocal = false; device.state = 'online'; device.last = '刚刚'; }
+              else if (starting && device?.id) { startingId = device.id; connectedId = null; selectedId = device.id; showingLocal = false; }
+              else {
+                const active = devices.find((item) => item.id === connectedId || item.id === startingId);
+                if (active) active.state = 'away';
+                connectedId = null;
+                startingId = null;
+              }
               persist();
               renderDevices();
               if (message) showToast(message);
@@ -633,10 +639,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         webView?.evaluateJavaScript("window.ThunderDisplayNative?.listening(\(active ? "true" : "false"));", completionHandler: nil)
     }
 
-    private func prototypeConnection(_ live: Bool, message: String? = nil, peerID: String? = nil) {
+    private func prototypeConnection(live: Bool, starting: Bool = false, message: String? = nil, peerID: String? = nil) {
         let messageValue = message.map(javaScriptString) ?? "null"
         let peerValue = peerID.map(javaScriptString) ?? "null"
-        webView?.evaluateJavaScript("window.ThunderDisplayNative?.connection(\(live ? "true" : "false"), \(UserDefaults.standard.bool(forKey: "displayRole") ? "'display'" : "'host'"), \(messageValue), \(peerValue));", completionHandler: nil)
+        webView?.evaluateJavaScript("window.ThunderDisplayNative?.connection(\(live ? "true" : "false"), \(starting ? "true" : "false"), \(UserDefaults.standard.bool(forKey: "displayRole") ? "'display'" : "'host'"), \(messageValue), \(peerValue));", completionHandler: nil)
     }
 
     private func prototypeDiagnostics(_ cable: CableAddress?) {
@@ -1012,10 +1018,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                         self.surface.onFirstImage = { [weak self, weak accepted] in
                             guard let self, let accepted, self.sessionID == generation, self.peer === accepted else { return }
                             self.showVideo()
+                            self.prototypeConnection(live: true)
                         }
                         self.record("配对通过 · 发射端 \(hello.appVersion ?? "未知") · 等待视频配置")
                         self.receiverKeepAwake = hello.preventDisplaySleep ?? true
-                        self.prototypeConnection(true, message: "已配对，等待视频", peerID: hello.identity?.id)
+                        self.prototypeConnection(live: false, starting: true, message: "已配对，等待视频", peerID: hello.identity?.id)
                         return true
                     }
                     guard promoted else { accepted.stop(); return }
@@ -1077,7 +1084,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 self.peer = nil
                 self.receiveLock.lock(); self.receiveSession = nil; self.receiveLock.unlock()
                 self.clearVideoPresentation()
-                self.prototypeConnection(false)
+                self.prototypeConnection(live: false)
                 self.metricsLabel.stringValue = ""
                 self.record("\(reason)；接收端仍在监听，可直接重连。")
             }
@@ -1163,7 +1170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                     self.prototypeTestResult(true, profile: profile, message: "检测成功：雷雳 TCP、配对码和屏幕参数交换均已通过。")
                                     self.endSession("测试成功：雷雳 TCP、配对与屏幕参数交换均已通过。"); return
                                 }
-                                self.prototypeConnection(true, message: "已连接，正在启动桌面采集", peerID: profile.identity?.id)
+                                self.prototypeConnection(live: false, starting: true, message: "已连接，正在启动桌面采集", peerID: profile.identity?.id)
                                 guard CGPreflightScreenCaptureAccess() else {
                                     CGRequestScreenCaptureAccess()
                                     self.endSession("网络连接已验证。请允许屏幕录制后重新连接。")
@@ -1213,6 +1220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                                 self.firstFrameAcknowledged = true
                                 self.reconnectAttempt = false
                                 self.record("首帧已确认 · 系统光标随画面同步")
+                                self.prototypeConnection(live: true)
                             }
                         case .statistics:
                             let stats = try Wire.decode(StreamStatistics.self, data)
@@ -1326,7 +1334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         receiveLock.lock(); receiveSession = nil; receiveLock.unlock()
         clearVideoPresentation()
         pairingLabel.stringValue = ""
-        prototypeConnection(false)
+        prototypeConnection(live: false)
         prototypeListening(false)
         if listener == nil { prototypePairing(address: nil, code: nil) }
         metricsLabel.stringValue = ""
@@ -1347,7 +1355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         statusLabel.stringValue = message
         connectionStateLabel.stringValue = message
         diagnosticStatusLabel.stringValue = message
-        prototypeStatus(message, active: peer != nil || listener != nil || connecting)
+        prototypeStatus(message, active: firstFrameAcknowledged || videoWindow != nil)
         updateStatusMenu()
         NSLog("%@", message)
     }
