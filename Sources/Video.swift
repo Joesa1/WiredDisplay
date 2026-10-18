@@ -49,7 +49,10 @@ func check(_ status: OSStatus, _ message: String) throws {
 }
 
 func encoderFallbackMode(for mode: TransmissionMode) -> TransmissionMode? {
-    mode == .duet ? .lowLatency : nil
+    switch mode {
+    case .lowLatency, .fidelity, .duet: return .lowLatency
+    case .lossless, .demo1, .demo2, .demo3: return nil
+    }
 }
 
 func captureQueueDepth(for mode: TransmissionMode) -> Int {
@@ -367,6 +370,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     private var previousRaw: Data?
     private var demo3NeedsKeyframe = false
     private var streamColorSpace: StreamColorSpace = .sRGB
+    private var encodesHEVC = false
     private var capturePixelFormat: OSType {
         switch mode {
         case .lowLatency: return kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
@@ -393,6 +397,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
 
     @MainActor func start(profile: DisplayProfile, mirror: Bool = false, audio: Bool = false, mode: TransmissionMode = .lowLatency) async throws {
         self.mode = mode
+        encodesHEVC = profile.hevc
         streamColorSpace = mode != .lowLatency && profile.wideGamut ? .displayP3 : .sRGB
         guard mode != .fidelity || profile.hevc else { throw WireError.invalid("色彩保真需要 HEVC 硬件解码支持，请选择其他模式") }
         guard mode != .duet || profile.hevc else { throw WireError.invalid("Duet 模式需要 HEVC Main10 硬件解码支持，请选择其他模式") }
@@ -438,11 +443,12 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 do {
                     try createEncoder(profile)
                 } catch {
-                    guard let fallback = encoderFallbackMode(for: self.mode) else { throw error }
+                    guard encodesHEVC, let fallback = encoderFallbackMode(for: self.mode) else { throw error }
                     self.mode = fallback
+                    encodesHEVC = false
                     streamColorSpace = .sRGB
                     budget = FrameBudget(limit: fallback.frameLimit)
-                    onStatus?("Duet Main10 encoder unavailable; retrying 8-bit HEVC")
+                    onStatus?("HEVC encoder unavailable; retrying 8-bit H.264")
                     try createEncoder(profile)
                 }
             }
@@ -478,7 +484,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     private func createEncoder(_ profile: DisplayProfile) throws {
-        let codec = profile.hevc ? kCMVideoCodecType_HEVC : kCMVideoCodecType_H264
+        let codec = encodesHEVC ? kCMVideoCodecType_HEVC : kCMVideoCodecType_H264
         let spec = [kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: true] as CFDictionary
         var session: VTCompressionSession?
         try check(VTCompressionSessionCreate(allocator: nil, width: Int32(profile.width), height: Int32(profile.height),
@@ -500,8 +506,8 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue), "无法启用实时编码")
         try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering, value: kCFBooleanFalse), "无法关闭帧重排")
         try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel,
-            value: mode == .fidelity || mode == .duet ? kVTProfileLevel_HEVC_Main10_AutoLevel : (profile.hevc ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_High_AutoLevel)), "此硬件不支持所选编码模式")
-        if mode == .fidelity || mode == .duet {
+            value: encodesHEVC ? (mode == .fidelity || mode == .duet ? kVTProfileLevel_HEVC_Main10_AutoLevel : kVTProfileLevel_HEVC_Main_AutoLevel) : kVTProfileLevel_H264_High_AutoLevel), "此硬件不支持所选编码模式")
+        if encodesHEVC && (mode == .fidelity || mode == .duet) {
             try check(VTSessionSetProperty(session, key: kVTCompressionPropertyKey_OutputBitDepth, value: 10 as CFNumber), "此硬件不支持 10-bit 编码")
         }
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate, value: 60 as CFNumber)
@@ -608,11 +614,11 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
               let block = CMSampleBufferGetDataBuffer(sample) else { throw WireError.invalid("编码器返回空画面") }
         if !configured {
             var sets: [Data] = []
-            for index in 0..<(profile.hevc ? 3 : 2) {
+            for index in 0..<(encodesHEVC ? 3 : 2) {
                 var pointer: UnsafePointer<UInt8>?
                 var size = 0
                 let status: OSStatus
-                if profile.hevc {
+                if encodesHEVC {
                     status = CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(format, parameterSetIndex: index,
                         parameterSetPointerOut: &pointer, parameterSetSizeOut: &size, parameterSetCountOut: nil, nalUnitHeaderLengthOut: nil)
                 } else {
@@ -624,7 +630,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                 sets.append(Data(bytes: pointer, count: size))
             }
             peer.send(.configuration, try Wire.json(VideoConfiguration(width: profile.width, height: profile.height,
-                                                                      hevc: profile.hevc, parameterSets: sets, mode: mode, colorSpace: streamColorSpace)))
+                                                                      hevc: encodesHEVC, parameterSets: sets, mode: mode, colorSpace: streamColorSpace)))
             configured = true
         }
         let length = CMBlockBufferGetDataLength(block)
@@ -655,7 +661,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
                     self.rateSamples.append(mbps)
                     if self.rateSamples.count > 60 { self.rateSamples.removeFirst(self.rateSamples.count - 60) }
                     let stats = StreamStatistics(fps: fps, roundTripMilliseconds: self.lastRoundTrip,
-                                                 megabitsPerSecond: mbps, codec: self.mode.isRGB ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · \(self.mode == .demo1 ? "Demo 1 LZ4 区域" : (self.mode == .demo2 ? "Demo 2 LZ4 整帧" : (self.mode == .demo3 ? "Demo 3 系统变化区域" : "无损")))" : (self.mode == .duet ? "HEVC 10-bit · \(self.streamColorSpace.rawValue) · Duet" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : (self.profile?.hevc == true ? "HEVC 8-bit · sRGB" : "H.264 8-bit · sRGB"))),
+                                                 megabitsPerSecond: mbps, codec: self.mode.isRGB ? "RGB 8-bit · \(self.streamColorSpace.rawValue) · \(self.mode == .demo1 ? "Demo 1 LZ4 区域" : (self.mode == .demo2 ? "Demo 2 LZ4 整帧" : (self.mode == .demo3 ? "Demo 3 系统变化区域" : "无损")))" : (self.encodesHEVC ? (self.mode == .duet ? "HEVC 10-bit · \(self.streamColorSpace.rawValue) · Duet" : (self.mode == .fidelity ? "HEVC 10-bit · \(self.streamColorSpace.rawValue)" : "HEVC 8-bit · sRGB")) : "H.264 8-bit · sRGB"),
                                                  samples: self.rateSamples)
                     self.onStats?(stats)
                     self.peer.send(.statistics, (try? Wire.json(stats)) ?? Data())
