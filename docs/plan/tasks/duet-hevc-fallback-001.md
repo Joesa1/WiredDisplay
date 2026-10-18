@@ -56,9 +56,17 @@ the retry. `VideoModesCheck` verifies the fallback decision and its effective
 configuration; verification results are recorded with the implementation
 commit. Independent review and merge still control the `done` transition.
 
-Verification on 2026-10-10:
+Verification on 2026-10-18:
 
 - `xcrun swiftc -swift-version 5 -import-objc-header Sources/VirtualDisplay.h Sources/Cable.swift Sources/DuetMode.swift Sources/Wire.swift Sources/Video.swift Tests/VideoModesCheck.swift -o /private/tmp/thunder-duet-hevc-video-modes-check ... && /private/tmp/thunder-duet-hevc-video-modes-check`: PASS (existing macOS API deprecation warnings only).
 - `xcrun swiftc -swift-version 5 Sources/Cable.swift Sources/DuetMode.swift Sources/Wire.swift Tests/TransportCheck.swift -o /private/tmp/thunder-duet-hevc-transport-check -framework Network -framework SystemConfiguration && /private/tmp/thunder-duet-hevc-transport-check`: PASS.
 - `./build.sh`: PASS; arm64 and x86_64 packages, SHA-256 manifest, and ad-hoc signature verification produced.
+
+Capture callback verification:
+
+- Fixed `Sources/Video.swift` to parse the ScreenCaptureKit status attachment
+  as `SCFrameStatus` rather than `Int`; the previous cast discarded every
+  screen sample and left the session waiting for its first frame.
+- `VideoModesCheck`: PASS after the capture-status fix (existing macOS API
+  deprecation warnings only).
 

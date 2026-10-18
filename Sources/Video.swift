@@ -574,7 +574,7 @@ final class ScreenSender: NSObject, SCStreamOutput, SCStreamDelegate {
         if type == .audio { relayAudio(sampleBuffer); return }
         guard type == .screen,
               let info = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
-              let status = info.first?[.status] as? Int, status == SCFrameStatus.complete.rawValue,
+              let status = info.first?[.status] as? SCFrameStatus, status == .complete,
               let image = CMSampleBufferGetImageBuffer(sampleBuffer), let profile else { return }
         if configured, let location = CGEvent(source: nil)?.location {
             let screenRect = (info.first?[.screenRect] as? NSValue)?.rectValue ?? CGDisplayBounds(displayID)
