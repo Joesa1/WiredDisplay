@@ -35,6 +35,7 @@ import Network
         precondition(TransmissionMode.duet.bitrate(width: 3840, height: 2160) == 149_299_200)
         precondition(VideoConfiguration(width: 640, height: 480, hevc: true, parameterSets: [], mode: .duet).decodedPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange)
         for requestedMode in [TransmissionMode.lowLatency, .fidelity, .duet] {
+            precondition(encoderAttempts(for: requestedMode, receiverSupportsHEVC: true) == [.hardwareHEVC, .hardwareH264, .videoToolboxH264])
             let fallbackMode = encoderFallbackMode(for: requestedMode)
             precondition(fallbackMode == .lowLatency)
             let fallback = VideoConfiguration(width: 640, height: 480, hevc: false,
@@ -44,6 +45,11 @@ import Network
             precondition(fallback.decodedPixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
             precondition(captureQueueDepth(for: fallbackMode!) == 3)
         }
+        precondition(encoderAttempts(for: .lowLatency, receiverSupportsHEVC: false) == [.hardwareH264, .videoToolboxH264])
+        precondition(encoderAttempts(for: .lossless, receiverSupportsHEVC: true).isEmpty)
+        precondition(EncoderAttempt.hardwareHEVC.encodesHEVC && EncoderAttempt.hardwareHEVC.requiresHardware)
+        precondition(!EncoderAttempt.hardwareH264.encodesHEVC && EncoderAttempt.hardwareH264.requiresHardware)
+        precondition(!EncoderAttempt.videoToolboxH264.encodesHEVC && !EncoderAttempt.videoToolboxH264.requiresHardware)
         precondition(captureQueueDepth(for: .duet) == 3)
         precondition(captureQueueDepth(for: .demo3) == 1)
         for mode in [TransmissionMode.lossless, .demo1, .demo2, .demo3] {
@@ -121,7 +127,7 @@ import Network
                 rejects { try decoder.decode(wirePacket) }
             }
         }
-        print("PASS: panel geometry, mode validation, lossy H.264 fallback decision, cursor packet validation, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
+        print("PASS: panel geometry, mode validation, bounded lossy encoder fallback sequence, cursor packet validation, padded RGB/demo roundtrip, immutable submitted buffers, P3 tags, truncated/oversize raw rejection")
         try checkMain10()
         if CommandLine.arguments.contains("--capture") {
             guard CGPreflightScreenCaptureAccess() else { throw WireError.invalid("Screen capture permission is required for --capture") }
